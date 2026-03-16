@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Downloader - TikTok, YouTube, IG, X</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <main class="container">
+        <header>
+            <h1>Pro<span>clipper</span></h1>
+            <p>Download video favoritmu dari berbagai platform tanpa watermark!</p>
+            <div class="platforms">
+                <i class="fa-brands fa-tiktok tiktok"></i>
+                <i class="fa-brands fa-youtube youtube"></i>
+                <i class="fa-brands fa-instagram instagram"></i>
+                <i class="fa-brands fa-x-twitter twitter"></i>
+            </div>
+        </header>
+
+        <section class="downloader-card">
+            <form id="downloadForm">
+                <div class="input-group">
+                    <i class="fa-solid fa-link icon"></i>
+                    <input type="url" id="videoUrl" placeholder="Tempel URL video di sini..." required>
+                    <button type="submit" id="downloadBtn">
+                        <span class="btn-text">Download</span>
+                        <i class="fa-solid fa-arrow-right"></i>
+                        <!-- Loading dots -->
+                        <div id="loadingSpinner" class="bouncing-dots hidden">
+                            <span class="dot"></span>
+                            <span class="dot"></span>
+                            <span class="dot"></span>
+                        </div>
+                    </button>
+                </div>
+            </form>
+            <div id="statusMessage" class="status-msg"></div>
+
+            <!-- Download Results Section (Hidden initially) -->
+            <div id="resultSection" class="result-section hidden">
+                <div class="video-info">
+                    <div class="thumbnail-placeholder">
+                        <i class="fa-solid fa-video"></i>
+                    </div>
+                    <div class="details">
+                        <h4 id="videoTitle">Video Title Example</h4>
+                        <p id="videoDuration">Durasi: 03:45</p>
+                    </div>
+                </div>
+                
+                <h3 class="options-title">Pilih Kualitas Unduhan:</h3>
+                <div class="download-options">
+                    <button class="dl-option normal-btn" data-quality="normal">
+                        <i class="fa-solid fa-download"></i> 720p (Normal)
+                    </button>
+                    <button class="dl-option hq-btn" data-quality="hq">
+                        <i class="fa-solid fa-crown"></i> 1080p (HD) - Tonton Iklan
+                    </button>
+                    <button class="dl-option uhq-btn" data-quality="uhq">
+                        <i class="fa-solid fa-gem"></i> 4K (Ultra HD) - Tonton Iklan
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <section class="features">
+            <div class="feature">
+                <i class="fa-solid fa-bolt"></i>
+                <h3>Cepat & Mudah</h3>
+                <p>Proses download instan tanpa ribet. Cukup tempel link dan klik!</p>
+            </div>
+            <div class="feature">
+                <i class="fa-solid fa-gem"></i>
+                <h3>Kualitas Tinggi</h3>
+                <p>Unduh video dengan resolusi terbaik hingga 4K.</p>
+            </div>
+            <div class="feature">
+                <i class="fa-solid fa-shield-halved"></i>
+                <h3>Aman & Gratis</h3>
+                <p>100% gratis tanpa perlu registrasi atau instal aplikasi tambahan.</p>
+            </div>
+        </section>
+    </main>
+
+    <!-- Ad Modal Overlay -->
+    <div id="adModal" class="modal-overlay hidden">
+        <div class="modal-card">
+            <button id="closeAdModal" class="close-btn"><i class="fa-solid fa-xmark"></i></button>
+            <h3 class="modal-title">Sponsor Kami</h3>
+            <p class="modal-desc">Tonton iklan singkat ini untuk membuka unduhan berkualitas tinggi (HD/4K).</p>
+            
+            <div class="ad-container">
+                <p>Tampilan Iklan Video/Banner (300x250) di sini</p>
+            </div>
+
+            <div class="ad-controls">
+                <button id="skipAdBtn" class="skip-btn" disabled>Lewati Iklan (Menunggu...)</button>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <p>&copy; 2026 Proclipper Downloader. All rights reserved.</p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
