@@ -365,12 +365,13 @@ footer {
     box-shadow: 0 0 30px rgba(0, 242, 254, 0.2);
     border-radius: 20px;
     width: 90%;
-    max-width: 400px;
+    max-width: 420px;
     padding: 30px;
     position: relative;
     text-align: center;
     z-index: 1001;
     pointer-events: auto;
+    overflow: hidden;
 }
 
 .close-btn {
@@ -413,7 +414,9 @@ footer {
 .ad-container {
     background: #000;
     border: 1px dashed rgba(255,255,255,0.3);
-    height: 200px;
+    min-height: 250px;
+    max-height: 280px;
+    overflow: hidden;
     display: flex;
     justify-content: center;
     align-items: center;

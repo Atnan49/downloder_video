@@ -374,34 +374,55 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.warn('Ad failed to load:', e);
                 adContainer.innerHTML = '<p style="color: var(--text-muted); padding: 2rem;">Iklan sedang dimuat...</p>';
             }
-            secondsLeft = 20;
+            secondsLeft = 10;
         } else {
             modalTitle.textContent = 'Harap Tunggu...';
             modalDesc.textContent = 'Saat ini tidak ada iklan yang tersedia. Anda dapat melanjutkan unduhan dalam beberapa detik.';
             adContainer.innerHTML = '<p style="color: var(--secondary-color);"><i class="fa-solid fa-hourglass-half fa-spin fa-2x"></i><br><br>Menyiapkan tautan unduhan kualitas tinggi...</p>';
-            secondsLeft = 10; // Timer lebih cepat jika tidak ada iklan
+            secondsLeft = 5; // Timer lebih cepat jika tidak ada iklan
         }
 
         if (sBtn) {
             sBtn.classList.remove('ready');
             sBtn.disabled = true;
-            sBtn.textContent = hasAd ? `⏳ Harap tonton iklan (${secondsLeft} detik...)` : `⏳ Tunggu (${secondsLeft} detik...)`;
+            sBtn.textContent = '⏳ Memuat iklan...';
         }
 
-        skipTimer = setInterval(() => {
-            const currentBtn = document.getElementById('skipAdBtn');
-            secondsLeft--;
-            if (secondsLeft > 0) {
-                if (currentBtn) currentBtn.textContent = hasAd ? `⏳ Harap tonton iklan (${secondsLeft} detik...)` : `⏳ Tunggu (${secondsLeft} detik...)`;
-            } else {
-                clearInterval(skipTimer);
-                if (currentBtn) {
-                    currentBtn.classList.add('ready');
-                    currentBtn.disabled = false;
-                    currentBtn.innerHTML = hasAd ? 'Lewati Iklan <i class="fa-solid fa-forward-step"></i>' : 'Lanjutkan Unduhan <i class="fa-solid fa-download"></i>';
-                }
+        // Tunggu sampai iklan (iframe) benar-benar tampil, baru mulai timer
+        function startCountdown() {
+            if (sBtn) {
+                sBtn.textContent = hasAd ? `⏳ Harap tonton iklan (${secondsLeft} detik...)` : `⏳ Tunggu (${secondsLeft} detik...)`;
             }
-        }, 1000);
+            skipTimer = setInterval(() => {
+                const currentBtn = document.getElementById('skipAdBtn');
+                secondsLeft--;
+                if (secondsLeft > 0) {
+                    if (currentBtn) currentBtn.textContent = hasAd ? `⏳ Harap tonton iklan (${secondsLeft} detik...)` : `⏳ Tunggu (${secondsLeft} detik...)`;
+                } else {
+                    clearInterval(skipTimer);
+                    if (currentBtn) {
+                        currentBtn.classList.add('ready');
+                        currentBtn.disabled = false;
+                        currentBtn.innerHTML = hasAd ? 'Lewati Iklan & Download <i class="fa-solid fa-download"></i>' : 'Lanjutkan Unduhan <i class="fa-solid fa-download"></i>';
+                    }
+                }
+            }, 1000);
+        }
+
+        if (hasAd) {
+            // Cek setiap 500ms apakah iframe iklan sudah muncul
+            let adCheckCount = 0;
+            const adChecker = setInterval(() => {
+                adCheckCount++;
+                const iframe = adContainer.querySelector('iframe');
+                if (iframe || adCheckCount >= 10) { // Mulai setelah iklan muncul atau max 5 detik
+                    clearInterval(adChecker);
+                    startCountdown();
+                }
+            }, 500);
+        } else {
+            startCountdown();
+        }
     }
 
     // Modal Close Mechanism
