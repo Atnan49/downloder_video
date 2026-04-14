@@ -471,36 +471,32 @@ footer {
     }
 }
 
-/* Side Ads Layout */
-.side-ad {
+/* Banner Ads Layout (Top & Bottom) */
+.banner-ad {
     display: none; /* Hidden on mobile */
-    position: fixed;
-    top: 150px;
-    width: 160px;
-    min-height: 600px;
-    z-index: 5;
-    background: rgba(0,0,0,0.4);
-    border: 1px dashed var(--glass-border);
-    border-radius: 10px;
+    width: 100%;
+    max-width: 1000px;
+    margin: 15px auto;
     justify-content: center;
     align-items: center;
     text-align: center;
-    color: var(--text-muted);
-    font-size: 0.85rem;
-    padding: 10px;
+    overflow: hidden;
+    border-radius: 10px;
 }
 
-.side-ad-left {
-    left: 20px;
+.banner-ad-top {
+    margin-top: 10px;
+    margin-bottom: 0;
 }
 
-.side-ad-right {
-    right: 20px;
+.banner-ad-bottom {
+    margin-top: 0;
+    margin-bottom: 20px;
 }
 
-/* Only show side ads on large screens (Desktop monitors) */
-@media (min-width: 1200px) {
-    .side-ad {
+/* Show banner ads on desktop screens */
+@media (min-width: 768px) {
+    .banner-ad {
         display: flex;
     }
 }
