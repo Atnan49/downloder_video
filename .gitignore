@@ -1,0 +1,14 @@
+# Binary files (besar, tidak perlu di-push - akan di-download otomatis di Docker)
+yt-dlp.exe
+ffmpeg-master-latest-win64-gpl-shared/
+
+# Temporary files
+temp_videos/
+
+# Test files
+test_yt.php
+find_ffmpeg.php
+
+# OS files
+.DS_Store
+Thumbs.db

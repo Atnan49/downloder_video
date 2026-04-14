@@ -279,6 +279,10 @@ button:active {
     background: linear-gradient(135deg, #11998e, #38ef7d);
     color: #000;
 }
+.audio-btn {
+    background: linear-gradient(135deg, #8E2DE2, #4A00E0);
+    color: #fff;
+}
 .uhq-btn {
     background: linear-gradient(135deg, #f12711, #f5af19);
     color: #000;
@@ -462,4 +466,61 @@ footer {
         justify-content: center;
         border-radius: 15px;
     }
+}
+
+/* Processing Progress Bar */
+.processing-progress {
+    margin-top: 1rem;
+}
+
+.progress-bar-track {
+    width: 100%;
+    height: 12px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.progress-bar-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+    border-radius: 10px;
+    transition: width 0.4s ease;
+    box-shadow: 0 0 10px rgba(0, 242, 254, 0.5);
+}
+
+/* Download Ready Button */
+.download-ready-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    background: linear-gradient(135deg, #38ef7d, #11998e);
+    color: #000;
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.15rem;
+    font-weight: 700;
+    padding: 16px 40px;
+    border-radius: 14px;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 8px 25px rgba(56, 239, 125, 0.3);
+    animation: pulseGlow 2s infinite;
+}
+
+.download-ready-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 35px rgba(56, 239, 125, 0.5);
+}
+
+.download-ready-btn:active {
+    transform: translateY(1px);
+}
+
+@keyframes pulseGlow {
+    0%, 100% { box-shadow: 0 8px 25px rgba(56, 239, 125, 0.3); }
+    50% { box-shadow: 0 8px 35px rgba(56, 239, 125, 0.6); }
 }

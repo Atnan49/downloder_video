@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Video Downloader - TikTok, YouTube, IG, X</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Video & Musik Downloader - TikTok, YouTube, IG, X</title>
+    <link rel="stylesheet" href="style.css?v=2">
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Fonts -->
@@ -14,7 +14,7 @@
     <main class="container">
         <header>
             <h1>Pro<span>clipper</span></h1>
-            <p>Download video favoritmu dari berbagai platform tanpa watermark!</p>
+            <p>Download video dan musik favoritmu dari berbagai platform tanpa watermark!</p>
             <div class="platforms">
                 <i class="fa-brands fa-tiktok tiktok"></i>
                 <i class="fa-brands fa-youtube youtube"></i>
@@ -105,10 +105,50 @@
         </div>
     </div>
 
+    <!-- Processing Modal Overlay -->
+    <div id="processingModal" class="modal-overlay hidden">
+        <div class="modal-card" style="text-align: center; max-width: 450px;">
+            <!-- Processing state -->
+            <div id="processingState">
+                <i class="fa-solid fa-cloud-arrow-down fa-beat" style="font-size: 3rem; color: var(--primary-color); margin-bottom: 1rem;"></i>
+                <h3 class="modal-title">Sedang Diproses...</h3>
+                <p class="modal-desc" style="margin-bottom: 1rem;">
+                    Video dengan Kualitas Tinggi sedang dirajut di server kami. 
+                    <br><br>
+                    <strong>Silakan tunggu, proses ini memerlukan waktu beberapa saat.</strong>
+                </p>
+                <div class="processing-progress">
+                    <div class="progress-bar-track">
+                        <div class="progress-bar-fill" id="progressBarFill"></div>
+                    </div>
+                    <p id="processingTimer" style="color: var(--text-muted); font-size: 0.85rem; margin-top: 8px;">Memproses...</p>
+                </div>
+            </div>
+            <!-- Done state (hidden initially) -->
+            <div id="doneState" class="hidden">
+                <i class="fa-solid fa-circle-check" style="font-size: 3rem; color: #38ef7d; margin-bottom: 1rem;"></i>
+                <h3 class="modal-title" style="color: #38ef7d;">Proses Selesai!</h3>
+                <p class="modal-desc" style="margin-bottom: 1.5rem;">
+                    Video kualitas tinggi berhasil diproses dan siap diunduh.
+                </p>
+                <a id="finalDownloadBtn" href="#" class="download-ready-btn">
+                    <i class="fa-solid fa-download"></i> Download Sekarang
+                </a>
+            </div>
+            <!-- Error state (hidden initially) -->
+            <div id="errorState" class="hidden">
+                <i class="fa-solid fa-circle-xmark" style="font-size: 3rem; color: #ff4444; margin-bottom: 1rem;"></i>
+                <h3 class="modal-title" style="color: #ff4444;">Gagal Memproses</h3>
+                <p class="modal-desc" id="errorMessage" style="margin-bottom: 1rem;">Terjadi kesalahan saat memproses video.</p>
+            </div>
+            <button id="closeProcessingModal" class="skip-btn ready" style="margin-top: 1rem; padding: 0.5rem 1rem;">Tutup</button>
+        </div>
+    </div>
+
     <footer>
         <p>&copy; 2026 Proclipper Downloader. All rights reserved.</p>
     </footer>
 
-    <script src="script.js"></script>
+    <script src="script.js?v=5"></script>
 </body>
 </html>

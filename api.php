@@ -30,6 +30,32 @@ try {
         respondWithError('Invalid URL format');
     }
 
+    // Workaround for Spotify DRM issue: Scrape title and search on YouTube
+    if (strpos($url, 'spotify.com') !== false) {
+        $context = stream_context_create([
+            'http' => [
+                'user_agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36',
+                'ignore_errors' => true 
+            ]
+        ]);
+        $html = @file_get_contents($url, false, $context);
+        if ($html) {
+            $searchQuery = '';
+            if (preg_match('/<meta property="og:title" content="(.*?)"/i', $html, $matches)) {
+                $searchQuery = html_entity_decode($matches[1], ENT_QUOTES);
+                if (preg_match('/<meta property="og:description" content="(.*?)"/i', $html, $descMatches)) {
+                    $searchQuery .= ' ' . html_entity_decode($descMatches[1], ENT_QUOTES);
+                }
+            } else if (preg_match('/<title>(.*?)<\/title>/i', $html, $matches)) {
+                $searchQuery = html_entity_decode(str_replace(' | Spotify', '', $matches[1]), ENT_QUOTES);
+            }
+
+            if (!empty($searchQuery)) {
+                $url = 'ytsearch1:' . $searchQuery;
+            }
+        }
+    }
+
     // Path executable yt-dlp (Deteksi dinamis antara PC Windows Anda dan Server Linux Render)
     if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
         $ytDlpPath = __DIR__ . DIRECTORY_SEPARATOR . 'yt-dlp.exe'; // Untuk XAMPP Lokal Windows
@@ -61,6 +87,11 @@ try {
         respondWithError('yt-dlp error: ' . $cleanError);
     }
 
+    // Jika hasil dari ytsearch (Spotify fallback), yt-dlp mengembalikan tipe playlist
+    if (isset($videoData['_type']) && $videoData['_type'] === 'playlist' && !empty($videoData['entries'])) {
+        $videoData = $videoData['entries'][0];
+    }
+
     // Extract essential data needed for the frontend
     $response = [
         'success' => true,
@@ -76,33 +107,47 @@ try {
     $filteredFormats = [];
 
     foreach ($formats as $f) {
-        // Basic filter: we want formats with URLs, ideally mp4
-        if (isset($f['url']) && strpos($f['url'], 'http') === 0 && ($f['ext'] === 'mp4' || $f['vcodec'] !== 'none')) {
+        // Basic filter: we want formats with URLs
+        if (isset($f['url']) && strpos($f['url'], 'http') === 0) {
             
             $height = isset($f['height']) ? $f['height'] : 0;
+            $vcodec = $f['vcodec'] ?? 'none';
+            $acodec = $f['acodec'] ?? 'none';
             
-            // Skip formats without video (audio only) if we want pure video
-            if ($f['vcodec'] === 'none' && $f['acodec'] !== 'none') {
+            // Catch formats without video (audio only) if we want pure audio
+            if ($vcodec === 'none' && $acodec !== 'none') {
+                $filteredFormats[] = [
+                    'format_id' => $f['format_id'] ?? '',
+                    'ext' => $f['ext'] ?? 'mp3',
+                    'height' => 'Audio',
+                    'url' => $f['url'],
+                    'quality_label' => 'audio',
+                    'format_note' => $f['format_note'] ?? 'Audio Only',
+                    'abr' => $f['abr'] ?? 0
+                ];
                 continue; 
             }
 
-            // Categorize roughly into normal, hq, uhq (this logic can be refined per platform)
-            $qualityLabel = 'normal';
-            if ($height >= 1080) {
-                $qualityLabel = 'hq';
-            }
-            if ($height >= 2160) {
-                $qualityLabel = 'uhq';
-            }
+            // Catch formats WITH BOTH video AND audio, OR high-res video (yang nantinya di-merge oleh proxy)
+            if (($vcodec !== 'none' && $acodec !== 'none') || ($vcodec !== 'none' && $height >= 1080)) {
+                // Kategori kualitas video antara normal, hq, uhq atau audio
+                $qualityLabel = 'normal';
+                if ($height >= 1080) {
+                    $qualityLabel = 'hq';
+                }
+                if ($height >= 2160) {
+                    $qualityLabel = 'uhq';
+                }
 
-            $filteredFormats[] = [
-                'format_id' => $f['format_id'] ?? '',
-                'ext' => $f['ext'] ?? 'mp4',
-                'height' => $height,
-                'url' => $f['url'],
-                'quality_label' => $qualityLabel,
-                'format_note' => $f['format_note'] ?? ($height . 'p')
-            ];
+                $filteredFormats[] = [
+                    'format_id' => $f['format_id'] ?? '',
+                    'ext' => $f['ext'] ?? 'mp4',
+                    'height' => $height,
+                    'url' => $f['url'], // Url is still provided but we might override action in JS
+                    'quality_label' => $qualityLabel,
+                    'format_note' => $f['format_note'] ?? ($height . 'p')
+                ];
+            }
         }
     }
 

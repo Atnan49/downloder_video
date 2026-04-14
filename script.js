@@ -51,6 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
             setLoadingState(false);
             if (data.success) {
                 showStatus('Video ditemukan!', '#38ef7d');
+                window.currentVideoOriginalUrl = url;
                 displayVideoData(data);
                 resultSection.classList.remove('hidden');
             } else {
@@ -126,6 +127,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     </button>
                 `;
             }
+
+            const hasAudio = formats.some(f => f.quality_label === 'audio');
+            if (hasAudio) {
+                 optionsContainer.innerHTML += `
+                    <button class="dl-option audio-btn" data-quality="audio">
+                        <i class="fa-solid fa-music"></i> Download MP3
+                    </button>
+                `;
+            }
         }
 
         // Re-attach event listeners to new buttons
@@ -135,6 +145,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Handle Quality Selection
     let targetDownloadUrl = '';
+    let targetDownloadQuality = 'hq';
 
     function attachDownloadListeners() {
         const dlOptions = document.querySelectorAll('.dl-option');
@@ -149,11 +160,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Find best matching format
                 let urlToDownload = window.videoDirectUrl; // Default to best raw url
 
+                let downloadExt = 'mp4';
+
                 if (window.videoDownloadFormats && window.videoDownloadFormats.length > 0) {
-                    const match = window.videoDownloadFormats.find(f => f.quality_label === quality) 
-                                  || window.videoDownloadFormats.find(f => f.quality_label === 'normal') 
-                                  || window.videoDownloadFormats[0];
-                    urlToDownload = match.url;
+                    if (quality === 'audio') {
+                        // Find best audio based on abr or take the last one
+                        const audioFormats = window.videoDownloadFormats.filter(f => f.quality_label === 'audio');
+                        audioFormats.sort((a, b) => (a.abr || 0) - (b.abr || 0));
+                        const match = audioFormats[audioFormats.length - 1] || audioFormats[0];
+                        urlToDownload = match.url;
+                        downloadExt = match.ext || 'mp3';
+                    } else {
+                        const match = window.videoDownloadFormats.find(f => f.quality_label === quality) 
+                                      || window.videoDownloadFormats.find(f => f.quality_label === 'normal') 
+                                      || window.videoDownloadFormats[0];
+                        urlToDownload = match.url;
+                        downloadExt = match.ext || 'mp4';
+                    }
                 }
 
                 if (!urlToDownload) {
@@ -161,11 +184,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
                 
-                if (quality === 'normal') {
+                if (quality === 'normal' || quality === 'audio') {
                     targetDownloadUrl = urlToDownload;
-                    startDownload(targetDownloadUrl, 'normal');
+                    targetDownloadQuality = quality;
+                    startDownload(targetDownloadUrl, quality, downloadExt);
                 } else {
-                    targetDownloadUrl = urlToDownload;
+                    targetDownloadUrl = `download.php?url=${encodeURIComponent(window.currentVideoOriginalUrl)}&quality=${quality}`;
+                    targetDownloadQuality = quality;
                     showAdModal();
                 }
             });
@@ -175,10 +200,98 @@ document.addEventListener('DOMContentLoaded', () => {
     // Call initially in case there are statically rendered buttons
     attachDownloadListeners();
 
-    function startDownload(url, quality) {
+    function startDownload(url, quality, ext = 'mp4') {
+        if (url.startsWith('download.php')) {
+            showStatus('⏳ Sedang memproses dan menggabung video di server...', '#f39c12');
+            
+            // Show the processing modal
+            const pModal = document.getElementById('processingModal');
+            const processingState = document.getElementById('processingState');
+            const doneState = document.getElementById('doneState');
+            const errorState = document.getElementById('errorState');
+            const progressFill = document.getElementById('progressBarFill');
+            const timerText = document.getElementById('processingTimer');
+
+            // Reset modal states
+            if (processingState) processingState.classList.remove('hidden');
+            if (doneState) doneState.classList.add('hidden');
+            if (errorState) errorState.classList.add('hidden');
+            if (progressFill) progressFill.style.width = '0%';
+            if (pModal) pModal.classList.remove('hidden');
+
+            // Animate progress bar (fake progress for UX)
+            let progress = 0;
+            const progressInterval = setInterval(() => {
+                if (progress < 90) {
+                    progress += Math.random() * 3;
+                    if (progress > 90) progress = 90;
+                    if (progressFill) progressFill.style.width = progress + '%';
+                }
+            }, 500);
+
+            // Timer display
+            let elapsed = 0;
+            const timerInterval = setInterval(() => {
+                elapsed++;
+                const mins = Math.floor(elapsed / 60);
+                const secs = elapsed % 60;
+                if (timerText) {
+                    timerText.textContent = `Memproses... ${mins > 0 ? mins + 'm ' : ''}${secs}s`;
+                }
+            }, 1000);
+
+            // Fetch to prepare (not auto-download)
+            fetch(url + '&action=prepare')
+                .then(response => response.json())
+                .then(data => {
+                    clearInterval(progressInterval);
+                    clearInterval(timerInterval);
+
+                    if (data.success) {
+                        // Complete progress bar
+                        if (progressFill) progressFill.style.width = '100%';
+                        
+                        // Switch to done state after a brief delay
+                        setTimeout(() => {
+                            if (processingState) processingState.classList.add('hidden');
+                            if (doneState) doneState.classList.remove('hidden');
+
+                            // Set download link
+                            const finalBtn = document.getElementById('finalDownloadBtn');
+                            if (finalBtn) {
+                                const serveUrl = `download.php?action=serve&fileId=${encodeURIComponent(data.fileId)}&quality=${encodeURIComponent(data.quality)}`;
+                                finalBtn.href = serveUrl;
+                                finalBtn.setAttribute('download', 'video_' + data.quality + '_proxy.mp4');
+                            }
+
+                            showStatus('✅ Video siap diunduh!', '#38ef7d');
+                        }, 500);
+                    } else {
+                        // Show error state
+                        if (processingState) processingState.classList.add('hidden');
+                        if (errorState) errorState.classList.remove('hidden');
+                        const errMsg = document.getElementById('errorMessage');
+                        if (errMsg) errMsg.textContent = data.error || 'Terjadi kesalahan saat memproses video.';
+                        showStatus('❌ Gagal memproses video.', '#ff4444');
+                    }
+                })
+                .catch(error => {
+                    clearInterval(progressInterval);
+                    clearInterval(timerInterval);
+                    
+                    if (processingState) processingState.classList.add('hidden');
+                    if (errorState) errorState.classList.remove('hidden');
+                    showStatus('❌ Gagal menyambung ke server.', '#ff4444');
+                    console.error('Processing error:', error);
+                });
+
+            return;
+        }
+
         const a = document.createElement('a');
         a.href = url;
-        a.setAttribute('download', 'video_' + quality + '.mp4');
+        const filename = quality === 'audio' ? 'music.mp3' : 'video_' + quality + '.' + ext;
+        a.setAttribute('download', filename);
         a.target = '_blank';
         document.body.appendChild(a);
         a.click();
@@ -196,6 +309,14 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // Handle Close Processing Modal
+        if (e.target.closest('#closeProcessingModal')) {
+            e.preventDefault();
+            const pModal = document.getElementById('processingModal');
+            if (pModal) pModal.classList.add('hidden');
+            return;
+        }
+
         // Handle Skip Ad Button
         const skipBtnEl = e.target.closest('#skipAdBtn');
         if (skipBtnEl) {
@@ -203,7 +324,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!skipBtnEl.disabled) {
                 closeAd();
                 if (targetDownloadUrl) {
-                    startDownload(targetDownloadUrl, 'hq');
+                    startDownload(targetDownloadUrl, targetDownloadQuality);
                 }
             }
             return;
@@ -212,6 +333,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // Handle Clicking Outside Modal Content
         if (e.target.id === 'adModal') {
             closeAd();
+            return;
+        }
+
+        if (e.target.id === 'processingModal') {
+            document.getElementById('processingModal').classList.add('hidden');
             return;
         }
     });
