@@ -86,10 +86,16 @@ $tempFile = $tempDir . DIRECTORY_SEPARATOR . $fileId . '.mp4';
 // We use + to merge best video and best audio if available
 $formatStr = ($quality === 'uhq') ? 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best' : 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best';
 
-// Direktori custom FFmpeg yang baru saja di-extract oleh pengguna
-$ffmpegDir = __DIR__ . DIRECTORY_SEPARATOR . 'ffmpeg-master-latest-win64-gpl-shared' . DIRECTORY_SEPARATOR . 'ffmpeg-master-latest-win64-gpl-shared' . DIRECTORY_SEPARATOR . 'bin';
+// OS specifics for FFmpeg path
+if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+    $ffmpegDir = __DIR__ . DIRECTORY_SEPARATOR . 'ffmpeg-master-latest-win64-gpl-shared' . DIRECTORY_SEPARATOR . 'ffmpeg-master-latest-win64-gpl-shared' . DIRECTORY_SEPARATOR . 'bin';
+    $ffmpegFlag = '--ffmpeg-location ' . escapeshellarg($ffmpegDir);
+} else {
+    // Di Linux/Railway, FFmpeg sudah diinstal secara global (/usr/bin/ffmpeg)
+    $ffmpegFlag = ''; // yt-dlp otomatis akan menemukan ffmpeg global
+}
 
-$cmd = escapeshellarg($ytDlpPath) . ' -f "' . $formatStr . '" --ffmpeg-location ' . escapeshellarg($ffmpegDir) . ' --merge-output-format mp4 -o ' . escapeshellarg($tempFile) . ' ' . escapeshellarg($url) . ' 2>&1';
+$cmd = escapeshellarg($ytDlpPath) . ' -f "' . $formatStr . '" ' . $ffmpegFlag . ' --merge-output-format mp4 -o ' . escapeshellarg($tempFile) . ' ' . escapeshellarg($url) . ' 2>&1';
 
 // Execute
 $output = shell_exec($cmd);
