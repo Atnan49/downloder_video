@@ -138,7 +138,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <i class="fa-solid fa-headphones"></i> Download M4A (Original)
                     </button>
                     <button class="dl-option audio-btn flac-btn" data-quality="audio-flac" style="background: linear-gradient(135deg, #1f4037, #99f2c8); margin-top: 5px; color: #000;">
-                        <i class="fa-solid fa-compact-disc"></i> Download FLAC (Lossless)
+                        <i class="fa-solid fa-compact-disc"></i> Download FLAC (Lossless) - Tonton Iklan
                     </button>
                 `;
             }
@@ -195,11 +195,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 targetDownloadUrl = `download.php?url=${encodeURIComponent(window.currentVideoOriginalUrl)}&quality=${quality}`;
                 targetDownloadQuality = quality;
 
-                if (quality === 'normal' || quality.startsWith('audio')) {
-                     // Unduh langsung dengan proxy (munculkan modal loading tanpa iklan paksaan)
+                if (quality === 'normal' || quality === 'audio' || quality === 'audio-m4a') {
+                     // Unduh langsung dengan proxy (SD, MP3, M4A = gratis tanpa iklan)
                      startDownload(targetDownloadUrl, quality, downloadExt);
                 } else {
-                     // Kualitas HD/4K wajib nonton iklan pop-up Banner 300x250 dulu
+                     // HD/4K/FLAC wajib nonton iklan pop-up Banner 300x250 dulu
                      showAdModal();
                 }
             });
