@@ -374,25 +374,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.warn('Ad failed to load:', e);
                 adContainer.innerHTML = '<p style="color: var(--text-muted); padding: 2rem;">Iklan sedang dimuat...</p>';
             }
-            secondsLeft = 5;
+            secondsLeft = 20;
         } else {
             modalTitle.textContent = 'Harap Tunggu...';
             modalDesc.textContent = 'Saat ini tidak ada iklan yang tersedia. Anda dapat melanjutkan unduhan dalam beberapa detik.';
             adContainer.innerHTML = '<p style="color: var(--secondary-color);"><i class="fa-solid fa-hourglass-half fa-spin fa-2x"></i><br><br>Menyiapkan tautan unduhan kualitas tinggi...</p>';
-            secondsLeft = 3; // Timer lebih cepat jika tidak ada iklan
+            secondsLeft = 10; // Timer lebih cepat jika tidak ada iklan
         }
 
         if (sBtn) {
             sBtn.classList.remove('ready');
             sBtn.disabled = true;
-            sBtn.textContent = hasAd ? `Lewati Iklan (${secondsLeft} detik...)` : `Tunggu (${secondsLeft} detik...)`;
+            sBtn.textContent = hasAd ? `⏳ Harap tonton iklan (${secondsLeft} detik...)` : `⏳ Tunggu (${secondsLeft} detik...)`;
         }
 
         skipTimer = setInterval(() => {
             const currentBtn = document.getElementById('skipAdBtn');
             secondsLeft--;
             if (secondsLeft > 0) {
-                if (currentBtn) currentBtn.textContent = hasAd ? `Lewati Iklan (${secondsLeft} detik...)` : `Tunggu (${secondsLeft} detik...)`;
+                if (currentBtn) currentBtn.textContent = hasAd ? `⏳ Harap tonton iklan (${secondsLeft} detik...)` : `⏳ Tunggu (${secondsLeft} detik...)`;
             } else {
                 clearInterval(skipTimer);
                 if (currentBtn) {
