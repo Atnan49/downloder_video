@@ -15,13 +15,16 @@ if ($action === 'serve') {
     }
     
     $tempDir = __DIR__ . DIRECTORY_SEPARATOR . 'temp_videos';
-    $tempFile = $tempDir . DIRECTORY_SEPARATOR . $fileId . '.mp4';
+    $files = glob($tempDir . DIRECTORY_SEPARATOR . $fileId . '.*');
     
-    if (file_exists($tempFile) && filesize($tempFile) > 0) {
+    if (!empty($files) && filesize($files[0]) > 0) {
+        $tempFile = $files[0];
+        $ext = pathinfo($tempFile, PATHINFO_EXTENSION);
         $quality = isset($_GET['quality']) ? trim($_GET['quality']) : 'hq';
         
-        header('Content-Type: video/mp4');
-        header('Content-Disposition: attachment; filename="video_' . $quality . '_proxy.mp4"');
+        $mime = ($ext === 'mp4') ? 'video/mp4' : 'audio/' . $ext;
+        header('Content-Type: ' . $mime);
+        header('Content-Disposition: attachment; filename="t_downloader_' . $quality . '.' . $ext . '"');
         header('Content-Length: ' . filesize($tempFile));
         header('Cache-Control: no-cache, no-store, must-revalidate');
         
@@ -80,13 +83,20 @@ if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
 }
 
 $fileId = uniqid('vid_');
-$ext = ($quality === 'audio') ? 'mp3' : 'mp4';
+if (strpos($quality, 'audio') === 0) {
+    if ($quality === 'audio-flac') $ext = 'flac';
+    elseif ($quality === 'audio-m4a') $ext = 'm4a';
+    else $ext = 'mp3';
+} else {
+    $ext = 'mp4';
+}
+
 $tempFile = $tempDir . DIRECTORY_SEPARATOR . $fileId . '.' . $ext;
 
 // Format selection logic
 if ($quality === 'uhq') {
     $formatStr = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best';
-} elseif ($quality === 'audio') {
+} elseif (strpos($quality, 'audio') === 0) {
     $formatStr = 'bestaudio/best';
 } elseif ($quality === 'normal') {
     $formatStr = 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best';
@@ -103,7 +113,12 @@ if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
     $ffmpegFlag = ''; // yt-dlp otomatis akan menemukan ffmpeg global
 }
 
-$extraFlags = ($quality === 'audio') ? '--extract-audio --audio-format mp3' : '--merge-output-format mp4';
+if (strpos($quality, 'audio') === 0) {
+    $extraFlags = '--extract-audio --audio-format ' . $ext;
+} else {
+    $extraFlags = '--merge-output-format mp4';
+}
+
 $cmd = escapeshellarg($ytDlpPath) . ' -f "' . $formatStr . '" ' . $ffmpegFlag . ' ' . $extraFlags . ' -o ' . escapeshellarg($tempFile) . ' ' . escapeshellarg($url) . ' 2>&1';
 
 // Execute
@@ -116,6 +131,7 @@ if (file_exists($tempFile) && filesize($tempFile) > 0) {
         'success' => true, 
         'fileId' => $fileId,
         'quality' => $quality,
+        'ext' => $ext,
         'fileSize' => filesize($tempFile)
     ]);
 } else {

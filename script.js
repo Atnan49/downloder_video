@@ -134,6 +134,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     <button class="dl-option audio-btn" data-quality="audio">
                         <i class="fa-solid fa-music"></i> Download MP3
                     </button>
+                    <button class="dl-option audio-btn m4a-btn" data-quality="audio-m4a" style="background: linear-gradient(135deg, #FF416C, #FF4B2B); margin-top: 5px;">
+                        <i class="fa-solid fa-headphones"></i> Download M4A (Original)
+                    </button>
+                    <button class="dl-option audio-btn flac-btn" data-quality="audio-flac" style="background: linear-gradient(135deg, #1f4037, #99f2c8); margin-top: 5px; color: #000;">
+                        <i class="fa-solid fa-compact-disc"></i> Download FLAC (Lossless)
+                    </button>
                 `;
             }
         }
@@ -163,13 +169,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 let downloadExt = 'mp4';
 
                 if (window.videoDownloadFormats && window.videoDownloadFormats.length > 0) {
-                    if (quality === 'audio') {
+                    if (quality.startsWith('audio')) {
                         // Find best audio based on abr or take the last one
                         const audioFormats = window.videoDownloadFormats.filter(f => f.quality_label === 'audio');
                         audioFormats.sort((a, b) => (a.abr || 0) - (b.abr || 0));
                         const match = audioFormats[audioFormats.length - 1] || audioFormats[0];
                         urlToDownload = match.url;
-                        downloadExt = match.ext || 'mp3';
+                        downloadExt = quality.split('-')[1] || 'mp3';
                     } else {
                         const match = window.videoDownloadFormats.find(f => f.quality_label === quality) 
                                       || window.videoDownloadFormats.find(f => f.quality_label === 'normal') 
@@ -189,7 +195,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 targetDownloadUrl = `download.php?url=${encodeURIComponent(window.currentVideoOriginalUrl)}&quality=${quality}`;
                 targetDownloadQuality = quality;
 
-                if (quality === 'normal' || quality === 'audio') {
+                if (quality === 'normal' || quality.startsWith('audio')) {
                      // Unduh langsung dengan proxy (munculkan modal loading tanpa iklan paksaan)
                      startDownload(targetDownloadUrl, quality, downloadExt);
                 } else {
@@ -259,12 +265,11 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (processingState) processingState.classList.add('hidden');
                             if (doneState) doneState.classList.remove('hidden');
 
-                            // Set download link
                             const finalBtn = document.getElementById('finalDownloadBtn');
                             if (finalBtn) {
                                 const serveUrl = `download.php?action=serve&fileId=${encodeURIComponent(data.fileId)}&quality=${encodeURIComponent(data.quality)}`;
                                 finalBtn.href = serveUrl;
-                                finalBtn.setAttribute('download', 'video_' + data.quality + '_proxy.mp4');
+                                finalBtn.setAttribute('download', 't_downloader_' + data.quality + '.' + (data.ext || 'mp4'));
                             }
 
                             showStatus('✅ Video siap diunduh!', '#38ef7d');
