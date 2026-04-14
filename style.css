@@ -468,6 +468,40 @@ footer {
     }
 }
 
+/* Side Ads Layout */
+.side-ad {
+    display: none; /* Hidden on mobile */
+    position: fixed;
+    top: 150px;
+    width: 160px;
+    min-height: 600px;
+    z-index: 5;
+    background: rgba(0,0,0,0.4);
+    border: 1px dashed var(--glass-border);
+    border-radius: 10px;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    padding: 10px;
+}
+
+.side-ad-left {
+    left: 20px;
+}
+
+.side-ad-right {
+    right: 20px;
+}
+
+/* Only show side ads on large screens (Desktop monitors) */
+@media (min-width: 1200px) {
+    .side-ad {
+        display: flex;
+    }
+}
+
 /* Processing Progress Bar */
 .processing-progress {
     margin-top: 1rem;

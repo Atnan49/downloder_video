@@ -11,7 +11,13 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
 </head>
 <body>
-    <main class="container">
+    <div class="main-layout">
+        <!-- Left Side Ad (Desktop only) -->
+        <aside class="side-ad side-ad-left">
+            <p class="ad-placeholder">Saran: Pasang Iklan Banner 160x600 di sini</p>
+        </aside>
+
+        <main class="container">
         <header>
             <h1>Tarif<span>ter</span></h1>
             <p>Download video dan musik favoritmu dari berbagai platform tanpa watermark!</p>
@@ -88,10 +94,15 @@
         </section>
     </main>
 
+    <!-- Right Side Ad (Desktop only) -->
+    <aside class="side-ad side-ad-right">
+        <p class="ad-placeholder">Saran: Pasang Iklan Banner 160x600 di sini</p>
+    </aside>
+    </div> <!-- end main-layout -->
+
     <!-- Ad Modal Overlay -->
     <div id="adModal" class="modal-overlay hidden">
         <div class="modal-card">
-            <button id="closeAdModal" class="close-btn"><i class="fa-solid fa-xmark"></i></button>
             <h3 class="modal-title">Sponsor Kami</h3>
             <p class="modal-desc">Tonton iklan singkat ini untuk membuka unduhan berkualitas tinggi (HD/4K).</p>
             

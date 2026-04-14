@@ -305,12 +305,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Global Event Delegation for Modal and Buttons
     document.addEventListener('click', (e) => {
-        // Handle Close Ad Modal (X button)
-        if (e.target.closest('#closeAdModal')) {
-            e.preventDefault();
-            closeAd();
-            return;
-        }
+        // Handle Close Ad Modal (X button) - REMOVED TO FORCE WAIT
 
         // Handle Close Processing Modal
         if (e.target.closest('#closeProcessingModal')) {
@@ -333,11 +328,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Handle Clicking Outside Modal Content
-        if (e.target.id === 'adModal') {
-            closeAd();
-            return;
-        }
+        // Handle Clicking Outside Modal Content - REMOVED TO FORCE WAIT
 
         if (e.target.id === 'processingModal') {
             document.getElementById('processingModal').classList.add('hidden');
