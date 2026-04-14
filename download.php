@@ -80,11 +80,19 @@ if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
 }
 
 $fileId = uniqid('vid_');
-$tempFile = $tempDir . DIRECTORY_SEPARATOR . $fileId . '.mp4';
+$ext = ($quality === 'audio') ? 'mp3' : 'mp4';
+$tempFile = $tempDir . DIRECTORY_SEPARATOR . $fileId . '.' . $ext;
 
 // Format selection logic
-// We use + to merge best video and best audio if available
-$formatStr = ($quality === 'uhq') ? 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best' : 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best';
+if ($quality === 'uhq') {
+    $formatStr = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best';
+} elseif ($quality === 'audio') {
+    $formatStr = 'bestaudio/best';
+} elseif ($quality === 'normal') {
+    $formatStr = 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best';
+} else { // hq
+    $formatStr = 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best';
+}
 
 // OS specifics for FFmpeg path
 if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
@@ -95,7 +103,8 @@ if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
     $ffmpegFlag = ''; // yt-dlp otomatis akan menemukan ffmpeg global
 }
 
-$cmd = escapeshellarg($ytDlpPath) . ' -f "' . $formatStr . '" ' . $ffmpegFlag . ' --merge-output-format mp4 -o ' . escapeshellarg($tempFile) . ' ' . escapeshellarg($url) . ' 2>&1';
+$extraFlags = ($quality === 'audio') ? '--extract-audio --audio-format mp3' : '--merge-output-format mp4';
+$cmd = escapeshellarg($ytDlpPath) . ' -f "' . $formatStr . '" ' . $ffmpegFlag . ' ' . $extraFlags . ' -o ' . escapeshellarg($tempFile) . ' ' . escapeshellarg($url) . ' 2>&1';
 
 // Execute
 $output = shell_exec($cmd);

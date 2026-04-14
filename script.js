@@ -184,14 +184,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
                 
+                // Semua jenis unduhan wajib di-proxy melalui server (download.php) 
+                // untuk menghindari masalah "403 Access Denied / Hotlink Protection" dari CDN TikTok.
+                targetDownloadUrl = `download.php?url=${encodeURIComponent(window.currentVideoOriginalUrl)}&quality=${quality}`;
+                targetDownloadQuality = quality;
+
                 if (quality === 'normal' || quality === 'audio') {
-                    targetDownloadUrl = urlToDownload;
-                    targetDownloadQuality = quality;
-                    startDownload(targetDownloadUrl, quality, downloadExt);
+                     // Unduh langsung dengan proxy (munculkan modal loading tanpa iklan paksaan)
+                     startDownload(targetDownloadUrl, quality, downloadExt);
                 } else {
-                    targetDownloadUrl = `download.php?url=${encodeURIComponent(window.currentVideoOriginalUrl)}&quality=${quality}`;
-                    targetDownloadQuality = quality;
-                    showAdModal();
+                     // Kualitas HD/4K wajib nonton iklan pop-up Banner 300x250 dulu
+                     showAdModal();
                 }
             });
         });
