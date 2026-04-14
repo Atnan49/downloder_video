@@ -20,5 +20,19 @@ RUN a2enmod rewrite
 # Salin semua file proyek (index.html, api.php, script.js, style.css) Anda ke folder publik Apache
 COPY . /var/www/html/
 
-# Buka Port 80 (Akan otomatis dideteksi oleh Render.com)
-EXPOSE 80
+# Buat folder temp_videos dan set permission
+RUN mkdir -p /var/www/html/temp_videos && chmod 777 /var/www/html/temp_videos
+
+# Railway menggunakan PORT environment variable (bukan selalu 80)
+# Konfigurasi Apache agar listen di $PORT
+RUN sed -i 's/Listen 80/Listen ${PORT}/g' /etc/apache2/ports.conf
+RUN sed -i 's/:80/:${PORT}/g' /etc/apache2/sites-available/000-default.conf
+
+# Set default PORT jika tidak disediakan
+ENV PORT=80
+
+# Expose port
+EXPOSE ${PORT}
+
+# Start Apache
+CMD ["apache2-foreground"]
