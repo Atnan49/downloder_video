@@ -476,12 +476,21 @@ footer {
     display: none; /* Hidden on mobile */
     width: 100%;
     max-width: 1000px;
-    margin: 15px auto;
+    height: 100px;
+    margin: 10px auto;
     justify-content: center;
     align-items: center;
     text-align: center;
     overflow: hidden;
     border-radius: 10px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--glass-border);
+}
+
+/* Scale down the tall 160x600 ad to fit in a horizontal strip */
+.banner-ad iframe {
+    transform: scale(0.55);
+    transform-origin: top center;
 }
 
 .banner-ad-top {
