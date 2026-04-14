@@ -12,3 +12,6 @@ find_ffmpeg.php
 # OS files
 .DS_Store
 Thumbs.db
+
+# Secret project folder (jangan sampai bocor!)
+Cliping ai/
