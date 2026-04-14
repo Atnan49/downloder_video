@@ -5,9 +5,12 @@ ffmpeg-master-latest-win64-gpl-shared/
 # Temporary files
 temp_videos/
 
-# Test files
+# Development & Test scripts (BAHAYA jika bisa diakses publik!)
 test_yt.php
 find_ffmpeg.php
+download_yt_dlp.php
+dl.js
+dl.ps1
 
 # OS files
 .DS_Store
