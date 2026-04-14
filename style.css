@@ -471,26 +471,18 @@ footer {
     }
 }
 
-/* Banner Ads Layout (Top & Bottom) */
+/* Banner Ads Layout (Top & Bottom) - 728x90 Leaderboard */
 .banner-ad {
     display: none; /* Hidden on mobile */
     width: 100%;
-    max-width: 1000px;
-    height: 100px;
+    max-width: 750px;
+    height: 90px;
     margin: 10px auto;
     justify-content: center;
     align-items: center;
     text-align: center;
     overflow: hidden;
-    border-radius: 10px;
-    background: rgba(0, 0, 0, 0.3);
-    border: 1px solid var(--glass-border);
-}
-
-/* Scale down the tall 160x600 ad to fit in a horizontal strip */
-.banner-ad iframe {
-    transform: scale(0.55);
-    transform-origin: top center;
+    border-radius: 8px;
 }
 
 .banner-ad-top {
