@@ -358,7 +358,22 @@ document.addEventListener('DOMContentLoaded', () => {
         if (hasAd) {
             modalTitle.textContent = 'Sponsor Kami';
             modalDesc.textContent = 'Tonton iklan singkat ini untuk membuka unduhan berkualitas tinggi (HD/4K).';
-            adContainer.innerHTML = '<p>Tampilan Iklan Video/Banner (300x250) di sini</p>';
+            // Dynamically load Adsterra 300x250 Banner
+            adContainer.innerHTML = '';
+            try {
+                const atScript = document.createElement('script');
+                atScript.type = 'text/javascript';
+                atScript.textContent = "atOptions = { 'key' : '9243233f70df21dccd099002974a2606', 'format' : 'iframe', 'height' : 250, 'width' : 300, 'params' : {} };";
+                adContainer.appendChild(atScript);
+                
+                const invokeScript = document.createElement('script');
+                invokeScript.type = 'text/javascript';
+                invokeScript.src = 'https://www.highperformanceformat.com/9243233f70df21dccd099002974a2606/invoke.js';
+                adContainer.appendChild(invokeScript);
+            } catch (e) {
+                console.warn('Ad failed to load:', e);
+                adContainer.innerHTML = '<p style="color: var(--text-muted); padding: 2rem;">Iklan sedang dimuat...</p>';
+            }
             secondsLeft = 5;
         } else {
             modalTitle.textContent = 'Harap Tunggu...';
