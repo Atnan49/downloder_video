@@ -337,7 +337,12 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             modalTitle.textContent = 'Please Wait...';
             modalDesc.textContent = 'No ads available right now. You can continue your download in a few seconds.';
-            adContainer.innerHTML = '<p style="color: var(--secondary-color);"><i class="fa-solid fa-hourglass-half fa-spin fa-2x"></i><br><br>Preparing your high-quality download link...</p>';
+            adContainer.innerHTML = '<div id="container-048a354770d57ed3a313e19c0774d3f7"></div><p style="color: var(--secondary-color);"><i class="fa-solid fa-hourglass-half fa-spin fa-2x"></i><br><br>Preparing your high-quality download link...</p>';
+            let script = document.createElement("script");
+            script.async = true;
+            script.setAttribute("data-cfasync", "false");
+            script.src = "https://pl29158084.profitablecpmratenetwork.com/048a354770d57ed3a313e19c0774d3f7/invoke.js";
+            adContainer.appendChild(script);
             secondsLeft = 5;
         }
 
