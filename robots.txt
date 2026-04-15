@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /
+
+# Disallow server-side scripts and temp files
+Disallow: /api.php
+Disallow: /download.php
+Disallow: /download_yt_dlp.php
+Disallow: /find_ffmpeg.php
+Disallow: /test_yt.php
+Disallow: /temp_videos/
+Disallow: /ffmpeg-master-latest-win64-gpl-shared/
+
+# Sitemap location
+Sitemap: https://tarifter.com/sitemap.xml
