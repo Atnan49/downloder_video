@@ -327,8 +327,18 @@ document.addEventListener('DOMContentLoaded', () => {
             modalTitle.textContent = 'Support Us';
             modalDesc.textContent = 'Watch this short ad to unlock high-quality downloads (HD/4K).';
             adContainer.innerHTML = '';
+            
             try {
-                // Adsterra scripts removed as per user request
+                // 1. Buat div container untuk Adsterra
+                adContainer.innerHTML = '<div id="container-048a354770d57ed3a313e19c0774d3f7"></div>';
+                
+                // 2. Inject script Adsterra ke dalam container
+                let script = document.createElement("script");
+                script.async = true;
+                script.setAttribute("data-cfasync", "false");
+                script.src = "https://pl29158084.profitablecpmratenetwork.com/048a354770d57ed3a313e19c0774d3f7/invoke.js";
+                adContainer.appendChild(script);
+
             } catch (e) {
                 console.warn('Ad failed to load:', e);
                 adContainer.innerHTML = '<p style="color: var(--text-muted); padding: 2rem;">Loading ad...</p>';
@@ -337,12 +347,10 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             modalTitle.textContent = 'Please Wait...';
             modalDesc.textContent = 'No ads available right now. You can continue your download in a few seconds.';
-            adContainer.innerHTML = '<div id="container-048a354770d57ed3a313e19c0774d3f7"></div><p style="color: var(--secondary-color);"><i class="fa-solid fa-hourglass-half fa-spin fa-2x"></i><br><br>Preparing your high-quality download link...</p>';
-            let script = document.createElement("script");
-            script.async = true;
-            script.setAttribute("data-cfasync", "false");
-            script.src = "https://pl29158084.profitablecpmratenetwork.com/048a354770d57ed3a313e19c0774d3f7/invoke.js";
-            adContainer.appendChild(script);
+            
+            // 3. Bersihkan blok else ini agar tidak memanggil iklan
+            adContainer.innerHTML = '<p style="color: var(--secondary-color);"><i class="fa-solid fa-hourglass-half fa-spin fa-2x"></i><br><br>Preparing your high-quality download link...</p>';
+            
             secondsLeft = 5;
         }
 
