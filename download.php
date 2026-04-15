@@ -61,8 +61,8 @@ if (!file_exists($tempDir)) {
     mkdir($tempDir, 0777, true);
 }
 
-// Bersihin file lama (> 1 jam) biar disk ga penuh
-foreach (glob($tempDir . DIRECTORY_SEPARATOR . "*.mp4") as $file) {
+// Bersihin file lama (> 1 jam) biar disk ga penuh untuk semua format pendukung
+foreach (glob($tempDir . DIRECTORY_SEPARATOR . "*.*") as $file) {
     if (filemtime($file) < time() - 3600) {
         @unlink($file);
     }
