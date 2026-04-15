@@ -328,15 +328,7 @@ document.addEventListener('DOMContentLoaded', () => {
             modalDesc.textContent = 'Watch this short ad to unlock high-quality downloads (HD/4K).';
             adContainer.innerHTML = '';
             try {
-                const atScript = document.createElement('script');
-                atScript.type = 'text/javascript';
-                atScript.textContent = "atOptions = { 'key' : '9243233f70df21dccd099002974a2606', 'format' : 'iframe', 'height' : 250, 'width' : 300, 'params' : {} };";
-                adContainer.appendChild(atScript);
-                
-                const invokeScript = document.createElement('script');
-                invokeScript.type = 'text/javascript';
-                invokeScript.src = 'https://www.highperformanceformat.com/9243233f70df21dccd099002974a2606/invoke.js';
-                adContainer.appendChild(invokeScript);
+                // Adsterra scripts removed as per user request
             } catch (e) {
                 console.warn('Ad failed to load:', e);
                 adContainer.innerHTML = '<p style="color: var(--text-muted); padding: 2rem;">Loading ad...</p>';
