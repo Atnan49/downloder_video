@@ -61,10 +61,14 @@ if (!file_exists($tempDir)) {
     mkdir($tempDir, 0777, true);
 }
 
-// Bersihin file lama (> 1 jam) biar disk ga penuh untuk semua format pendukung
-foreach (glob($tempDir . DIRECTORY_SEPARATOR . "*.*") as $file) {
-    if (filemtime($file) < time() - 3600) {
-        @unlink($file);
+// Jalankan proses bersih-bersih secara acak (probabilitas 10%)
+// Biar disk dan CPU server gak ngos-ngosan saat trafik tinggi
+if (rand(1, 10) === 1) {
+    // HANYA hapus file yang berawalan "vid_" (Sangat Aman)
+    foreach (glob($tempDir . DIRECTORY_SEPARATOR . "vid_*.*") as $file) {
+        if (file_exists($file) && filemtime($file) < time() - 3600) {
+            @unlink($file);
+        }
     }
 }
 
