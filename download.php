@@ -31,7 +31,17 @@ if ($action === 'serve') {
             ob_end_clean();
         }
         
-        readfile($tempFile);
+        // Chunked file output untuk menghemat RAM (Memory) saat melayani file besar (misal 1GB)
+        $chunkSize = 8 * 1024 * 1024; // 8 MB per chunk
+        $handle = fopen($tempFile, 'rb');
+        if ($handle === false) {
+            die("Error opening file");
+        }
+        while (!feof($handle)) {
+            echo fread($handle, $chunkSize);
+            flush();
+        }
+        fclose($handle);
         
         @unlink($tempFile);
         exit;
@@ -47,6 +57,14 @@ $quality = isset($_GET['quality']) ? trim($_GET['quality']) : 'hq';
 if (empty($url)) {
     header('Content-Type: application/json');
     echo json_encode(['success' => false, 'error' => 'URL is missing']);
+    exit;
+}
+
+// Validasi URL Strict (Hanya izinkan HTTP dan HTTPS) untuk mencegah shell/command injection
+$urlIsHttp = preg_match('#^https?://#i', $url);
+if (!$urlIsHttp && strpos($url, 'ytsearch') !== 0) {
+    header('Content-Type: application/json');
+    echo json_encode(['success' => false, 'error' => 'Invalid URL protocol. Only HTTP and HTTPS are allowed.']);
     exit;
 }
 
