@@ -11,15 +11,10 @@ RUN wget -qO /usr/local/bin/yt-dlp https://github.com/yt-dlp/yt-dlp/releases/lat
 
 RUN a2enmod rewrite
 
-# Siapkan folder
 RUN mkdir -p /var/www/html/temp_videos && chmod 777 /var/www/html/temp_videos
 COPY . /var/www/html/
 
-# PENTING: Jangan gunakan script sed untuk mengganti PORT. 
-# Cukup gunakan EXPOSE 80, dan Railway otomatis akan merutekan trafik ke port 80.
 EXPOSE 80
 
-# RAILWAY SPECIFIC FIX:
-# Eksekusi pembersihan MPM secara dinamis di RUNTIME sebelum Apache menyala.
-# Ini mengatasi bug langka di Railway di mana mpm_event tiba-tiba aktif.
+# Fix kasus mpm_event nyala sendiri di Railway
 CMD ["/bin/bash", "-c", "a2dismod mpm_event mpm_worker || true; a2enmod mpm_prefork; apache2-foreground"]

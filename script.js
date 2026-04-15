@@ -22,22 +22,20 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const url = urlInput.value.trim();
         
-        // Basic validation
         if (!url) {
-            showStatus('Harap masukkan URL video yang valid!', '#ff4444');
+            showStatus('Please enter a valid video URL!', '#ff4444');
             return;
         }
 
         const isValidUrl = /^(https?:\/\/)?([\w\d\-_]+\.+[A-Za-z]{2,})+\/?/.test(url);
         if (!isValidUrl) {
-            showStatus('Format URL tidak valid. Periksa kembali link kamu.', '#ff4444');
+            showStatus('Invalid URL format. Please check your link.', '#ff4444');
             return;
         }
 
-        // Fetch from API
         setLoadingState(true);
         resultSection.classList.add('hidden');
-        showStatus('Menganalisa tautan video...', '#00f2fe');
+        showStatus('Analyzing video link...', '#00f2fe');
 
         fetch('api.php', {
             method: 'POST',
@@ -50,24 +48,24 @@ document.addEventListener('DOMContentLoaded', () => {
         .then(data => {
             setLoadingState(false);
             if (data.success) {
-                showStatus('Video ditemukan!', '#38ef7d');
+                showStatus('Video found!', '#38ef7d');
                 window.currentVideoOriginalUrl = url;
                 displayVideoData(data);
                 resultSection.classList.remove('hidden');
             } else {
-                showStatus('Gagal: ' + (data.error || 'Terjadi kesalahan tidak diketahui'), '#ff4444');
+                showStatus('Error: ' + (data.error || 'An unknown error occurred'), '#ff4444');
             }
         })
         .catch(error => {
             setLoadingState(false);
-            showStatus('Gagal menyambung ke server.', '#ff4444');
+            showStatus('Failed to connect to server.', '#ff4444');
             console.error('Error:', error);
         });
     });
 
     function displayVideoData(data) {
         document.getElementById('videoTitle').textContent = data.title;
-        document.getElementById('videoDuration').textContent = 'Durasi: ' + (data.duration_string || 'N/A');
+        document.getElementById('videoDuration').textContent = 'Duration: ' + (data.duration_string || 'N/A');
         
         const thumbContainer = document.querySelector('.thumbnail-placeholder');
         if (data.thumbnail) {
@@ -76,7 +74,6 @@ document.addEventListener('DOMContentLoaded', () => {
             thumbContainer.innerHTML = '<i class="fa-solid fa-video"></i>';
         }
 
-        // We can store the raw formats in the window object to acccess them later
         window.videoDownloadFormats = data.formats || [];
         window.videoDirectUrl = data.best_url || '';
 
@@ -85,21 +82,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderDownloadOptions(formats, bestUrl) {
         const optionsContainer = document.querySelector('.download-options');
-        optionsContainer.innerHTML = ''; // Clear existing
+        optionsContainer.innerHTML = '';
 
         if (!formats || formats.length === 0) {
             if (bestUrl) {
-                // Fallback direct format
                 optionsContainer.innerHTML = `
                     <button class="dl-option normal-btn" data-quality="normal">
-                        <i class="fa-solid fa-download"></i> Unduh Video (Kualitas Default)
+                        <i class="fa-solid fa-download"></i> Download Video (Default Quality)
                     </button>
                 `;
             } else {
-                optionsContainer.innerHTML = '<p class="text-center">Tidak ada tautan unduhan yang ditemukan.</p>';
+                optionsContainer.innerHTML = '<p class="text-center">No download links found.</p>';
             }
         } else {
-            // Check availability of each tier
             const hasNormal = formats.some(f => f.quality_label === 'normal');
             const hasHq = formats.some(f => f.quality_label === 'hq');
             const hasUhq = formats.some(f => f.quality_label === 'uhq');
@@ -107,7 +102,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (hasNormal || bestUrl) {
                 optionsContainer.innerHTML += `
                     <button class="dl-option normal-btn" data-quality="normal">
-                        <i class="fa-solid fa-download"></i> Kualitas Standar (SD/Normal)
+                        <i class="fa-solid fa-download"></i> Standard Quality (SD)
                     </button>
                 `;
             }
@@ -115,7 +110,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (hasHq) {
                 optionsContainer.innerHTML += `
                     <button class="dl-option hq-btn" data-quality="hq">
-                        <i class="fa-solid fa-crown"></i> Kualitas Tinggi (HD) - Tonton Iklan
+                        <i class="fa-solid fa-crown"></i> High Quality (HD) - Watch Ad
                     </button>
                 `;
             }
@@ -123,7 +118,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (hasUhq) {
                  optionsContainer.innerHTML += `
                     <button class="dl-option uhq-btn" data-quality="uhq">
-                        <i class="fa-solid fa-gem"></i> Kualitas Ultra (4K) - Tonton Iklan
+                        <i class="fa-solid fa-gem"></i> Ultra Quality (4K) - Watch Ad
                     </button>
                 `;
             }
@@ -138,39 +133,33 @@ document.addEventListener('DOMContentLoaded', () => {
                         <i class="fa-solid fa-headphones"></i> Download M4A (Original)
                     </button>
                     <button class="dl-option audio-btn flac-btn" data-quality="audio-flac" style="background: linear-gradient(135deg, #1f4037, #99f2c8); margin-top: 5px; color: #000;">
-                        <i class="fa-solid fa-compact-disc"></i> Download FLAC (Lossless) - Tonton Iklan
+                        <i class="fa-solid fa-compact-disc"></i> Download FLAC (Lossless) - Watch Ad
                     </button>
                 `;
             }
         }
 
-        // Re-attach event listeners to new buttons
         attachDownloadListeners();
     }
 
 
-    // Handle Quality Selection
     let targetDownloadUrl = '';
     let targetDownloadQuality = 'hq';
 
     function attachDownloadListeners() {
         const dlOptions = document.querySelectorAll('.dl-option');
         dlOptions.forEach(btn => {
-            // Remove old listeners to avoid duplicates if called multiple times
             const newBtn = btn.cloneNode(true);
             btn.parentNode.replaceChild(newBtn, btn);
             
             newBtn.addEventListener('click', (e) => {
                 const quality = e.currentTarget.dataset.quality;
 
-                // Find best matching format
-                let urlToDownload = window.videoDirectUrl; // Default to best raw url
-
+                let urlToDownload = window.videoDirectUrl;
                 let downloadExt = 'mp4';
 
                 if (window.videoDownloadFormats && window.videoDownloadFormats.length > 0) {
                     if (quality.startsWith('audio')) {
-                        // Find best audio based on abr or take the last one
                         const audioFormats = window.videoDownloadFormats.filter(f => f.quality_label === 'audio');
                         audioFormats.sort((a, b) => (a.abr || 0) - (b.abr || 0));
                         const match = audioFormats[audioFormats.length - 1] || audioFormats[0];
@@ -186,34 +175,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 if (!urlToDownload) {
-                    alert('Tautan unduhan tidak tersedia untuk kualitas ini, atau video belum dianalisa.');
+                    alert('Download link not available for this quality, or video has not been analyzed yet.');
                     return;
                 }
                 
-                // Semua jenis unduhan wajib di-proxy melalui server (download.php) 
-                // untuk menghindari masalah "403 Access Denied / Hotlink Protection" dari CDN TikTok.
                 targetDownloadUrl = `download.php?url=${encodeURIComponent(window.currentVideoOriginalUrl)}&quality=${quality}`;
                 targetDownloadQuality = quality;
 
                 if (quality === 'normal' || quality === 'audio' || quality === 'audio-m4a') {
-                     // Unduh langsung dengan proxy (SD, MP3, M4A = gratis tanpa iklan)
                      startDownload(targetDownloadUrl, quality, downloadExt);
                 } else {
-                     // HD/4K/FLAC wajib nonton iklan pop-up Banner 300x250 dulu
                      showAdModal();
                 }
             });
         });
     }
 
-    // Call initially in case there are statically rendered buttons
     attachDownloadListeners();
 
     function startDownload(url, quality, ext = 'mp4') {
         if (url.startsWith('download.php')) {
-            showStatus('⏳ Sedang memproses dan menggabung video di server...', '#f39c12');
+            showStatus('⏳ Processing and merging video on server...', '#f39c12');
             
-            // Show the processing modal
             const pModal = document.getElementById('processingModal');
             const processingState = document.getElementById('processingState');
             const doneState = document.getElementById('doneState');
@@ -221,14 +204,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const progressFill = document.getElementById('progressBarFill');
             const timerText = document.getElementById('processingTimer');
 
-            // Reset modal states
             if (processingState) processingState.classList.remove('hidden');
             if (doneState) doneState.classList.add('hidden');
             if (errorState) errorState.classList.add('hidden');
             if (progressFill) progressFill.style.width = '0%';
             if (pModal) pModal.classList.remove('hidden');
 
-            // Animate progress bar (fake progress for UX)
             let progress = 0;
             const progressInterval = setInterval(() => {
                 if (progress < 90) {
@@ -238,18 +219,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }, 500);
 
-            // Timer display
             let elapsed = 0;
             const timerInterval = setInterval(() => {
                 elapsed++;
                 const mins = Math.floor(elapsed / 60);
                 const secs = elapsed % 60;
                 if (timerText) {
-                    timerText.textContent = `Memproses... ${mins > 0 ? mins + 'm ' : ''}${secs}s`;
+                    timerText.textContent = `Processing... ${mins > 0 ? mins + 'm ' : ''}${secs}s`;
                 }
             }, 1000);
 
-            // Fetch to prepare (not auto-download)
             fetch(url + '&action=prepare')
                 .then(response => response.json())
                 .then(data => {
@@ -257,10 +236,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     clearInterval(timerInterval);
 
                     if (data.success) {
-                        // Complete progress bar
                         if (progressFill) progressFill.style.width = '100%';
                         
-                        // Switch to done state after a brief delay
                         setTimeout(() => {
                             if (processingState) processingState.classList.add('hidden');
                             if (doneState) doneState.classList.remove('hidden');
@@ -272,15 +249,14 @@ document.addEventListener('DOMContentLoaded', () => {
                                 finalBtn.setAttribute('download', 't_downloader_' + data.quality + '.' + (data.ext || 'mp4'));
                             }
 
-                            showStatus('✅ Video siap diunduh!', '#38ef7d');
+                            showStatus('✅ Video is ready to download!', '#38ef7d');
                         }, 500);
                     } else {
-                        // Show error state
                         if (processingState) processingState.classList.add('hidden');
                         if (errorState) errorState.classList.remove('hidden');
                         const errMsg = document.getElementById('errorMessage');
-                        if (errMsg) errMsg.textContent = data.error || 'Terjadi kesalahan saat memproses video.';
-                        showStatus('❌ Gagal memproses video.', '#ff4444');
+                        if (errMsg) errMsg.textContent = data.error || 'An error occurred while processing the video.';
+                        showStatus('❌ Failed to process video.', '#ff4444');
                     }
                 })
                 .catch(error => {
@@ -289,7 +265,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     if (processingState) processingState.classList.add('hidden');
                     if (errorState) errorState.classList.remove('hidden');
-                    showStatus('❌ Gagal menyambung ke server.', '#ff4444');
+                    showStatus('❌ Failed to connect to server.', '#ff4444');
                     console.error('Processing error:', error);
                 });
 
@@ -305,14 +281,10 @@ document.addEventListener('DOMContentLoaded', () => {
         a.click();
         document.body.removeChild(a);
         
-        showStatus('Proses unduhan dimulai...', '#38ef7d');
+        showStatus('Download started!', '#38ef7d');
     }
 
-    // Global Event Delegation for Modal and Buttons
     document.addEventListener('click', (e) => {
-        // Handle Close Ad Modal (X button) - REMOVED TO FORCE WAIT
-
-        // Handle Close Processing Modal
         if (e.target.closest('#closeProcessingModal')) {
             e.preventDefault();
             const pModal = document.getElementById('processingModal');
@@ -320,7 +292,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Handle Skip Ad Button
         const skipBtnEl = e.target.closest('#skipAdBtn');
         if (skipBtnEl) {
             e.preventDefault();
@@ -332,8 +303,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             return;
         }
-
-        // Handle Clicking Outside Modal Content - REMOVED TO FORCE WAIT
 
         if (e.target.id === 'processingModal') {
             document.getElementById('processingModal').classList.add('hidden');
@@ -347,7 +316,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         modal.classList.remove('hidden');
         
-        // Simulasikan 30% kemungkinan tidak ada iklan yang tersedia
         const hasAd = Math.random() > 0.3;
         
         const modalTitle = modal.querySelector('.modal-title');
@@ -356,9 +324,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const sBtn = document.getElementById('skipAdBtn');
 
         if (hasAd) {
-            modalTitle.textContent = 'Sponsor Kami';
-            modalDesc.textContent = 'Tonton iklan singkat ini untuk membuka unduhan berkualitas tinggi (HD/4K).';
-            // Dynamically load Adsterra 300x250 Banner
+            modalTitle.textContent = 'Support Us';
+            modalDesc.textContent = 'Watch this short ad to unlock high-quality downloads (HD/4K).';
             adContainer.innerHTML = '';
             try {
                 const atScript = document.createElement('script');
@@ -372,50 +339,48 @@ document.addEventListener('DOMContentLoaded', () => {
                 adContainer.appendChild(invokeScript);
             } catch (e) {
                 console.warn('Ad failed to load:', e);
-                adContainer.innerHTML = '<p style="color: var(--text-muted); padding: 2rem;">Iklan sedang dimuat...</p>';
+                adContainer.innerHTML = '<p style="color: var(--text-muted); padding: 2rem;">Loading ad...</p>';
             }
             secondsLeft = 10;
         } else {
-            modalTitle.textContent = 'Harap Tunggu...';
-            modalDesc.textContent = 'Saat ini tidak ada iklan yang tersedia. Anda dapat melanjutkan unduhan dalam beberapa detik.';
-            adContainer.innerHTML = '<p style="color: var(--secondary-color);"><i class="fa-solid fa-hourglass-half fa-spin fa-2x"></i><br><br>Menyiapkan tautan unduhan kualitas tinggi...</p>';
-            secondsLeft = 5; // Timer lebih cepat jika tidak ada iklan
+            modalTitle.textContent = 'Please Wait...';
+            modalDesc.textContent = 'No ads available right now. You can continue your download in a few seconds.';
+            adContainer.innerHTML = '<p style="color: var(--secondary-color);"><i class="fa-solid fa-hourglass-half fa-spin fa-2x"></i><br><br>Preparing your high-quality download link...</p>';
+            secondsLeft = 5;
         }
 
         if (sBtn) {
             sBtn.classList.remove('ready');
             sBtn.disabled = true;
-            sBtn.textContent = '⏳ Memuat iklan...';
+            sBtn.textContent = '⏳ Loading ad...';
         }
 
-        // Tunggu sampai iklan (iframe) benar-benar tampil, baru mulai timer
         function startCountdown() {
             if (sBtn) {
-                sBtn.textContent = hasAd ? `⏳ Harap tonton iklan (${secondsLeft} detik...)` : `⏳ Tunggu (${secondsLeft} detik...)`;
+                sBtn.textContent = hasAd ? `⏳ Please watch the ad (${secondsLeft}s...)` : `⏳ Wait (${secondsLeft}s...)`;
             }
             skipTimer = setInterval(() => {
                 const currentBtn = document.getElementById('skipAdBtn');
                 secondsLeft--;
                 if (secondsLeft > 0) {
-                    if (currentBtn) currentBtn.textContent = hasAd ? `⏳ Harap tonton iklan (${secondsLeft} detik...)` : `⏳ Tunggu (${secondsLeft} detik...)`;
+                    if (currentBtn) currentBtn.textContent = hasAd ? `⏳ Please watch the ad (${secondsLeft}s...)` : `⏳ Wait (${secondsLeft}s...)`;
                 } else {
                     clearInterval(skipTimer);
                     if (currentBtn) {
                         currentBtn.classList.add('ready');
                         currentBtn.disabled = false;
-                        currentBtn.innerHTML = hasAd ? 'Lewati Iklan & Download <i class="fa-solid fa-download"></i>' : 'Lanjutkan Unduhan <i class="fa-solid fa-download"></i>';
+                        currentBtn.innerHTML = hasAd ? 'Skip Ad & Download <i class="fa-solid fa-download"></i>' : 'Continue Download <i class="fa-solid fa-download"></i>';
                     }
                 }
             }, 1000);
         }
 
         if (hasAd) {
-            // Cek setiap 500ms apakah iframe iklan sudah muncul
             let adCheckCount = 0;
             const adChecker = setInterval(() => {
                 adCheckCount++;
                 const iframe = adContainer.querySelector('iframe');
-                if (iframe || adCheckCount >= 10) { // Mulai setelah iklan muncul atau max 5 detik
+                if (iframe || adCheckCount >= 10) {
                     clearInterval(adChecker);
                     startCountdown();
                 }
@@ -425,7 +390,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Modal Close Mechanism
     function closeAd() {
         const modal = document.getElementById('adModal');
         if (modal) {
@@ -456,7 +420,6 @@ document.addEventListener('DOMContentLoaded', () => {
         statusMessage.textContent = message;
         statusMessage.style.color = color;
         
-        // Fade out message after 4 seconds
         setTimeout(() => {
             if (statusMessage.textContent === message) {
                 statusMessage.textContent = '';

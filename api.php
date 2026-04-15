@@ -1,10 +1,6 @@
 <?php
 header('Content-Type: application/json');
 
-// Enable error reporting for debugging during development
-// ini_set('display_errors', 1);
-// error_reporting(E_ALL);
-
 function respondWithError($message) {
     echo json_encode(['success' => false, 'error' => $message]);
     exit;
@@ -25,12 +21,11 @@ try {
         respondWithError('URL is required');
     }
 
-    // Basic URL validation
     if (!filter_var($url, FILTER_VALIDATE_URL)) {
         respondWithError('Invalid URL format');
     }
 
-    // Workaround for Spotify DRM issue: Scrape title and search on YouTube
+    // Spotify ga bisa langsung, jadi scrape judul terus cari di YouTube
     if (strpos($url, 'spotify.com') !== false) {
         $context = stream_context_create([
             'http' => [
@@ -56,43 +51,36 @@ try {
         }
     }
 
-    // Path executable yt-dlp (Deteksi dinamis antara PC Windows Anda dan Server Linux Render)
+    // Deteksi path yt-dlp sesuai OS
     if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-        $ytDlpPath = __DIR__ . DIRECTORY_SEPARATOR . 'yt-dlp.exe'; // Untuk XAMPP Lokal Windows
+        $ytDlpPath = __DIR__ . DIRECTORY_SEPARATOR . 'yt-dlp.exe';
     } else {
-        $ytDlpPath = '/usr/local/bin/yt-dlp'; // Untuk Render.com Server (Linux)
-        
-        // Cadangan jika diletakkan di folder yang sama di Linux
+        $ytDlpPath = '/usr/local/bin/yt-dlp';
         if (!file_exists($ytDlpPath)) {
             $ytDlpPath = __DIR__ . DIRECTORY_SEPARATOR . 'yt-dlp';
         }
     }
 
-    // Command to fetch video information in JSON format (no playlist)
-    // -J = dump JSON
-    // --no-warnings = suppress warnings
     $cmd = escapeshellcmd($ytDlpPath) . ' -J --no-playlist --no-warnings ' . escapeshellarg($url) . ' 2>&1';
 
-    // Execute the command
     $output = shell_exec($cmd);
 
     if ($output === null || trim($output) === '') {
-        respondWithError('Failed to execute yt-dlp command. Atau output kosong. Periksa izin atau anti-virus.');
+        respondWithError('Gagal menjalankan yt-dlp. Output kosong, cek izin atau antivirus.');
     }
 
     $videoData = json_decode($output, true);
 
     if ($videoData === null) {
-        $cleanError = substr($output, 0, 500); // Send the raw stdout back so we know why yt-dlp failed
+        $cleanError = substr($output, 0, 500);
         respondWithError('yt-dlp error: ' . $cleanError);
     }
 
-    // Jika hasil dari ytsearch (Spotify fallback), yt-dlp mengembalikan tipe playlist
+    // Kalau dari ytsearch (fallback Spotify), ambil entry pertama
     if (isset($videoData['_type']) && $videoData['_type'] === 'playlist' && !empty($videoData['entries'])) {
         $videoData = $videoData['entries'][0];
     }
 
-    // Extract essential data needed for the frontend
     $response = [
         'success' => true,
         'title' => $videoData['title'] ?? 'Unknown Title',
@@ -102,19 +90,17 @@ try {
         'formats' => []
     ];
 
-    // Try to find playable/downloadable formats
     $formats = $videoData['formats'] ?? [];
     $filteredFormats = [];
 
     foreach ($formats as $f) {
-        // Basic filter: we want formats with URLs
         if (isset($f['url']) && strpos($f['url'], 'http') === 0) {
             
             $height = isset($f['height']) ? $f['height'] : 0;
             $vcodec = $f['vcodec'] ?? 'none';
             $acodec = $f['acodec'] ?? 'none';
             
-            // Catch formats without video (audio only) if we want pure audio
+            // Audio only
             if ($vcodec === 'none' && $acodec !== 'none') {
                 $filteredFormats[] = [
                     'format_id' => $f['format_id'] ?? '',
@@ -128,9 +114,8 @@ try {
                 continue; 
             }
 
-            // Catch formats WITH BOTH video AND audio, OR high-res video (yang nantinya di-merge oleh proxy)
+            // Video + audio, atau video HD yang nanti di-merge
             if (($vcodec !== 'none' && $acodec !== 'none') || ($vcodec !== 'none' && $height >= 1080)) {
-                // Kategori kualitas video antara normal, hq, uhq atau audio
                 $qualityLabel = 'normal';
                 if ($height >= 1080) {
                     $qualityLabel = 'hq';
@@ -143,7 +128,7 @@ try {
                     'format_id' => $f['format_id'] ?? '',
                     'ext' => $f['ext'] ?? 'mp4',
                     'height' => $height,
-                    'url' => $f['url'], // Url is still provided but we might override action in JS
+                    'url' => $f['url'],
                     'quality_label' => $qualityLabel,
                     'format_note' => $f['format_note'] ?? ($height . 'p')
                 ];
@@ -151,9 +136,7 @@ try {
         }
     }
 
-    // Note: many sites (like youtube) separate video and audio for high quality.
-    // yt-dlp's default requested formats or combined formats are usually easier to handle.
-    // If the videoData has a direct 'url' attribute on the root, it's usually the best combined format.
+    // Fallback ke direct URL kalau ga ada format yg cocok
     if (empty($filteredFormats) && isset($videoData['url'])) {
         $filteredFormats[] = [
             'format_id' => 'direct',
@@ -167,7 +150,6 @@ try {
 
     $response['formats'] = array_values($filteredFormats);
 
-    // Also include the raw best URL if available easily
     if (isset($videoData['url'])) {
         $response['best_url'] = $videoData['url'];
     }

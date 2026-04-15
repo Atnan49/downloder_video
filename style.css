@@ -29,7 +29,6 @@ body {
     overflow-x: hidden;
 }
 
-/* Main Container */
 .container {
     width: 100%;
     max-width: 1000px;
@@ -84,7 +83,6 @@ header p {
 .platforms .instagram:hover { color: #e1306c; text-shadow: 0 0 10px #e1306c; }
 .platforms .twitter:hover { color: #1da1f2; text-shadow: 0 0 10px #1da1f2; }
 
-/* Downloader Card */
 .downloader-card {
     background: var(--card-bg);
     backdrop-filter: blur(15px);
@@ -201,7 +199,6 @@ button:active {
     color: var(--accent);
 }
 
-/* Download Results Section */
 .result-section {
     margin-top: 30px;
     padding-top: 25px;
@@ -288,7 +285,6 @@ button:active {
     color: #000;
 }
 
-/* Features Section */
 .features {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -342,7 +338,6 @@ footer {
     margin-top: auto;
 }
 
-/* Modal Overlay */
 .modal-overlay {
     position: fixed;
     top: 0;
@@ -432,7 +427,7 @@ footer {
     background: rgba(255,255,255,0.1);
     color: var(--text-muted);
     cursor: not-allowed;
-    pointer-events: none; /* Can't click when not ready */
+    pointer-events: none;
     z-index: 1001 !important;
     position: relative;
 }
@@ -441,10 +436,9 @@ footer {
     background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
     color: #000;
     cursor: pointer;
-    pointer-events: auto !important; /* Clickable when ready */
+    pointer-events: auto !important;
 }
 
-/* Responsive */
 @media (max-width: 768px) {
     header h1 { font-size: 2.5rem; }
     .input-group {
@@ -471,9 +465,8 @@ footer {
     }
 }
 
-/* Banner Ads Layout (Top & Bottom) - 728x90 Leaderboard */
 .banner-ad {
-    display: none; /* Hidden on mobile */
+    display: none;
     width: 100%;
     max-width: 750px;
     height: 90px;
@@ -495,14 +488,12 @@ footer {
     margin-bottom: 20px;
 }
 
-/* Show banner ads on desktop screens */
 @media (min-width: 768px) {
     .banner-ad {
         display: flex;
     }
 }
 
-/* Processing Progress Bar */
 .processing-progress {
     margin-top: 1rem;
 }
@@ -525,7 +516,6 @@ footer {
     box-shadow: 0 0 10px rgba(0, 242, 254, 0.5);
 }
 
-/* Download Ready Button */
 .download-ready-btn {
     display: inline-flex;
     align-items: center;
@@ -557,4 +547,60 @@ footer {
 @keyframes pulseGlow {
     0%, 100% { box-shadow: 0 8px 25px rgba(56, 239, 125, 0.3); }
     50% { box-shadow: 0 8px 35px rgba(56, 239, 125, 0.6); }
+}
+
+.faq-section h2 {
+    color: var(--text-main);
+}
+
+.faq-item {
+    background: var(--card-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    margin-bottom: 10px;
+    overflow: hidden;
+    transition: border-color 0.3s ease;
+}
+
+.faq-item[open] {
+    border-color: var(--primary-color);
+}
+
+.faq-item summary {
+    padding: 16px 20px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 1rem;
+    color: var(--text-main);
+    list-style: none;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: color 0.3s ease;
+}
+
+.faq-item summary::-webkit-details-marker {
+    display: none;
+}
+
+.faq-item summary::after {
+    content: '+';
+    font-size: 1.3rem;
+    color: var(--primary-color);
+    transition: transform 0.3s ease;
+}
+
+.faq-item[open] summary::after {
+    content: '−';
+}
+
+.faq-item summary:hover {
+    color: var(--primary-color);
+}
+
+.faq-item p {
+    padding: 0 20px 16px;
+    color: var(--text-muted);
+    line-height: 1.7;
+    font-size: 0.95rem;
 }

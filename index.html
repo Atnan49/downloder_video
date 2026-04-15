@@ -1,24 +1,97 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tarifter - Download Video & Musik Gratis dari TikTok, YouTube, IG, X</title>
-    <meta name="description" content="Download video dan musik dari TikTok, YouTube, Instagram, dan X (Twitter) tanpa watermark. Gratis, cepat, dan mendukung kualitas HD, 4K, MP3, M4A, FLAC.">
-    <meta name="keywords" content="download video tiktok, download youtube mp3, download instagram reels, video downloader, musik downloader, flac downloader, tarifter">
-    <meta property="og:title" content="Tarifter - Video & Musik Downloader Gratis">
-    <meta property="og:description" content="Download video dan musik dari berbagai platform tanpa watermark. Kualitas hingga 4K dan audio Lossless FLAC.">
+    <title>Tarifter - Free Video & Music Downloader | TikTok, YouTube, Instagram, X</title>
+    <meta name="description" content="Download videos and music from TikTok, YouTube, Instagram, and X (Twitter) for free. No watermark, HD, 4K, MP3, M4A, FLAC quality. Fast, safe, no registration needed.">
+    <meta name="keywords" content="video downloader, tiktok downloader no watermark, youtube to mp3, instagram reels downloader, twitter video downloader, free music downloader, 4k video download, flac downloader, tarifter">
+    <meta property="og:title" content="Tarifter - Free Video & Music Downloader">
+    <meta property="og:description" content="Download videos and music from TikTok, YouTube, Instagram, and X without watermark. HD, 4K, and lossless audio quality.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://tarifter.com">
-    <meta name="robots" content="index, follow">
+    <meta property="og:site_name" content="Tarifter">
+    <meta property="og:locale" content="en_US">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Tarifter - Free Video & Music Downloader">
+    <meta name="twitter:description" content="Download videos and music from TikTok, YouTube, Instagram, and X for free. No watermark, up to 4K quality.">
+    <link rel="canonical" href="https://tarifter.com/">
+    <link rel="alternate" hreflang="en" href="https://tarifter.com/">
+    <link rel="alternate" hreflang="x-default" href="https://tarifter.com/">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
     <link rel="stylesheet" href="style.css?v=2">
-    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="pages.css?v=1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Tarifter",
+        "url": "https://tarifter.com",
+        "description": "Free online video and music downloader. Download from TikTok, YouTube, Instagram, and X without watermark in HD, 4K, MP3, FLAC quality.",
+        "applicationCategory": "MultimediaApplication",
+        "operatingSystem": "All",
+        "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+        },
+        "browserRequirements": "Requires JavaScript",
+        "featureList": [
+            "TikTok video download without watermark",
+            "YouTube to MP3 converter",
+            "YouTube to MP4 download in 4K",
+            "Instagram Reels downloader",
+            "Twitter/X video downloader",
+            "FLAC lossless audio download",
+            "No registration required"
+        ]
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+            {
+                "@type": "Question",
+                "name": "How do I download TikTok videos without watermark?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Copy the TikTok video URL, paste it into Tarifter's download box, and click Download. Your video will be processed without any watermark."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "Can I download YouTube videos in 4K quality?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Yes! Tarifter supports downloading YouTube videos in SD, HD (1080p), and Ultra HD (4K 2160p) quality. Simply paste the YouTube URL and select your preferred quality."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "Is Tarifter free to use?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Yes, Tarifter is 100% free. No registration or subscription required. Standard quality downloads are instant, while HD and 4K downloads are available after viewing a short ad."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "What audio formats does Tarifter support?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Tarifter supports MP3, M4A (original quality), and FLAC (lossless) audio formats for music downloads."
+                }
+            }
+        ]
+    }
+    </script>
 </head>
 <body>
-    <!-- Top Banner Ad (Desktop only) -->
     <div class="banner-ad banner-ad-top">
         <script type="text/javascript">
             atOptions = {
@@ -35,7 +108,7 @@
     <main class="container">
         <header>
             <h1>Tarif<span>ter</span></h1>
-            <p>Download video dan musik favoritmu dari berbagai platform tanpa watermark!</p>
+            <p>Download videos and music from your favorite platforms — watermark free!</p>
             <div class="platforms">
                 <i class="fa-brands fa-tiktok tiktok"></i>
                 <i class="fa-brands fa-youtube youtube"></i>
@@ -48,11 +121,10 @@
             <form id="downloadForm">
                 <div class="input-group">
                     <i class="fa-solid fa-link icon"></i>
-                    <input type="url" id="videoUrl" placeholder="Tempel URL video di sini..." required>
+                    <input type="url" id="videoUrl" placeholder="Paste your video URL here..." required>
                     <button type="submit" id="downloadBtn">
                         <span class="btn-text">Download</span>
                         <i class="fa-solid fa-arrow-right"></i>
-                        <!-- Loading dots -->
                         <div id="loadingSpinner" class="bouncing-dots hidden">
                             <span class="dot"></span>
                             <span class="dot"></span>
@@ -63,28 +135,27 @@
             </form>
             <div id="statusMessage" class="status-msg"></div>
 
-            <!-- Download Results Section (Hidden initially) -->
             <div id="resultSection" class="result-section hidden">
                 <div class="video-info">
                     <div class="thumbnail-placeholder">
                         <i class="fa-solid fa-video"></i>
                     </div>
                     <div class="details">
-                        <h4 id="videoTitle">Video Title Example</h4>
-                        <p id="videoDuration">Durasi: 03:45</p>
+                        <h4 id="videoTitle">Video Title</h4>
+                        <p id="videoDuration">Duration: 03:45</p>
                     </div>
                 </div>
                 
-                <h3 class="options-title">Pilih Kualitas Unduhan:</h3>
+                <h3 class="options-title">Choose Download Quality:</h3>
                 <div class="download-options">
                     <button class="dl-option normal-btn" data-quality="normal">
-                        <i class="fa-solid fa-download"></i> 720p (Normal)
+                        <i class="fa-solid fa-download"></i> 720p (Standard)
                     </button>
                     <button class="dl-option hq-btn" data-quality="hq">
-                        <i class="fa-solid fa-crown"></i> 1080p (HD) - Tonton Iklan
+                        <i class="fa-solid fa-crown"></i> 1080p (HD) - Watch Ad
                     </button>
                     <button class="dl-option uhq-btn" data-quality="uhq">
-                        <i class="fa-solid fa-gem"></i> 4K (Ultra HD) - Tonton Iklan
+                        <i class="fa-solid fa-gem"></i> 4K (Ultra HD) - Watch Ad
                     </button>
                 </div>
             </div>
@@ -93,23 +164,46 @@
         <section class="features">
             <div class="feature">
                 <i class="fa-solid fa-bolt"></i>
-                <h3>Cepat & Mudah</h3>
-                <p>Proses download instan tanpa ribet. Cukup tempel link dan klik!</p>
+                <h3>Fast & Easy</h3>
+                <p>Instant downloads with zero hassle. Just paste a link and go!</p>
             </div>
             <div class="feature">
                 <i class="fa-solid fa-gem"></i>
-                <h3>Kualitas Tinggi</h3>
-                <p>Unduh video dengan resolusi terbaik hingga 4K.</p>
+                <h3>Premium Quality</h3>
+                <p>Download videos in stunning resolution up to 4K Ultra HD.</p>
             </div>
             <div class="feature">
                 <i class="fa-solid fa-shield-halved"></i>
-                <h3>Aman & Gratis</h3>
-                <p>100% gratis tanpa perlu registrasi atau instal aplikasi tambahan.</p>
+                <h3>Safe & Free</h3>
+                <p>100% free with no registration, no apps to install, no hidden fees.</p>
             </div>
+        </section>
+
+        <section class="faq-section" style="width:100%; max-width:700px; margin-bottom:50px;">
+            <h2 style="text-align:center; font-size:1.8rem; margin-bottom:25px;">Frequently Asked Questions</h2>
+            <details class="faq-item">
+                <summary>How do I download TikTok videos without watermark?</summary>
+                <p>Copy the TikTok video URL, paste it into Tarifter's download box, and click Download. Your video will be processed without any watermark — clean and ready to save.</p>
+            </details>
+            <details class="faq-item">
+                <summary>Can I download YouTube videos in 4K quality?</summary>
+                <p>Absolutely! Tarifter supports SD (720p), HD (1080p), and Ultra HD (4K/2160p) downloads from YouTube. Just paste the URL and pick your quality.</p>
+            </details>
+            <details class="faq-item">
+                <summary>Is Tarifter completely free?</summary>
+                <p>Yes — 100% free, no account needed. Standard quality downloads are instant. HD and 4K require a short ad viewing to keep the service running.</p>
+            </details>
+            <details class="faq-item">
+                <summary>What audio formats are supported?</summary>
+                <p>We support MP3 (compressed), M4A (original quality), and FLAC (lossless) audio downloads. Perfect for music lovers who want the best sound quality.</p>
+            </details>
+            <details class="faq-item">
+                <summary>Which platforms does Tarifter support?</summary>
+                <p>Tarifter works with TikTok, YouTube, Instagram (Reels, Stories, IGTV), and X (Twitter). We're constantly adding support for more platforms.</p>
+            </details>
         </section>
     </main>
 
-    <!-- Bottom Banner Ad (Desktop only) -->
     <div class="banner-ad banner-ad-bottom">
         <script type="text/javascript">
             atOptions = {
@@ -123,14 +217,12 @@
         <script type="text/javascript" src="https://www.highperformanceformat.com/d5c8be8e40963baa36ef6f3e33d20ed6/invoke.js"></script>
     </div>
 
-    <!-- Ad Modal Overlay -->
     <div id="adModal" class="modal-overlay hidden">
         <div class="modal-card">
-            <h3 class="modal-title">Sponsor Kami</h3>
-            <p class="modal-desc">Tonton iklan singkat ini untuk membuka unduhan berkualitas tinggi (HD/4K).</p>
+            <h3 class="modal-title">Support Us</h3>
+            <p class="modal-desc">Watch this short ad to unlock high-quality downloads (HD/4K).</p>
             
             <div class="ad-container">
-                <!-- Adsterra 300x250 Banner -->
                 <script type="text/javascript">
                     atOptions = {
                         'key' : '9243233f70df21dccd099002974a2606',
@@ -144,58 +236,60 @@
             </div>
 
             <div class="ad-controls">
-                <button id="skipAdBtn" class="skip-btn" disabled>Lewati Iklan (Menunggu...)</button>
+                <button id="skipAdBtn" class="skip-btn" disabled>Skip Ad (Waiting...)</button>
             </div>
         </div>
     </div>
 
-    <!-- Processing Modal Overlay -->
     <div id="processingModal" class="modal-overlay hidden">
         <div class="modal-card" style="text-align: center; max-width: 450px;">
-            <!-- Processing state -->
             <div id="processingState">
                 <i class="fa-solid fa-cloud-arrow-down fa-beat" style="font-size: 3rem; color: var(--primary-color); margin-bottom: 1rem;"></i>
-                <h3 class="modal-title">Sedang Diproses...</h3>
+                <h3 class="modal-title">Processing...</h3>
                 <p class="modal-desc" style="margin-bottom: 1rem;">
-                    Video dengan Kualitas Tinggi sedang dirajut di server kami. 
+                    Your high-quality video is being prepared on our servers.
                     <br><br>
-                    <strong>Silakan tunggu, proses ini memerlukan waktu beberapa saat.</strong>
+                    <strong>Please wait, this may take a moment.</strong>
                 </p>
                 <div class="processing-progress">
                     <div class="progress-bar-track">
                         <div class="progress-bar-fill" id="progressBarFill"></div>
                     </div>
-                    <p id="processingTimer" style="color: var(--text-muted); font-size: 0.85rem; margin-top: 8px;">Memproses...</p>
+                    <p id="processingTimer" style="color: var(--text-muted); font-size: 0.85rem; margin-top: 8px;">Processing...</p>
                 </div>
             </div>
-            <!-- Done state (hidden initially) -->
             <div id="doneState" class="hidden">
                 <i class="fa-solid fa-circle-check" style="font-size: 3rem; color: #38ef7d; margin-bottom: 1rem;"></i>
-                <h3 class="modal-title" style="color: #38ef7d;">Proses Selesai!</h3>
+                <h3 class="modal-title" style="color: #38ef7d;">Ready!</h3>
                 <p class="modal-desc" style="margin-bottom: 1.5rem;">
-                    Video kualitas tinggi berhasil diproses dan siap diunduh.
+                    Your high-quality video is ready to download.
                 </p>
                 <a id="finalDownloadBtn" href="#" class="download-ready-btn">
-                    <i class="fa-solid fa-download"></i> Download Sekarang
+                    <i class="fa-solid fa-download"></i> Download Now
                 </a>
             </div>
-            <!-- Error state (hidden initially) -->
             <div id="errorState" class="hidden">
                 <i class="fa-solid fa-circle-xmark" style="font-size: 3rem; color: #ff4444; margin-bottom: 1rem;"></i>
-                <h3 class="modal-title" style="color: #ff4444;">Gagal Memproses</h3>
-                <p class="modal-desc" id="errorMessage" style="margin-bottom: 1rem;">Terjadi kesalahan saat memproses video.</p>
+                <h3 class="modal-title" style="color: #ff4444;">Processing Failed</h3>
+                <p class="modal-desc" id="errorMessage" style="margin-bottom: 1rem;">An error occurred while processing your video.</p>
             </div>
-            <button id="closeProcessingModal" class="skip-btn ready" style="margin-top: 1rem; padding: 0.5rem 1rem;">Tutup</button>
+            <button id="closeProcessingModal" class="skip-btn ready" style="margin-top: 1rem; padding: 0.5rem 1rem;">Close</button>
         </div>
     </div>
 
     <footer>
+        <div class="footer-links">
+            <a href="index.html">Home</a>
+            <a href="about.html">About</a>
+            <a href="privacy.html">Privacy Policy</a>
+            <a href="terms.html">Terms of Service</a>
+            <a href="dmca.html">DMCA</a>
+        </div>
         <p>&copy; 2026 Tarifter Downloader. All rights reserved.</p>
     </footer>
 
     <script src="script.js?v=6"></script>
     
-    <!-- Adsterra Popunder Script -->
     <script src="https://pl29149968.profitablecpmratenetwork.com/49/e8/bb/49e8bb7ae5be56880c21ce100e012614.js"></script>
 </body>
 </html>

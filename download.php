@@ -1,15 +1,14 @@
 <?php
-set_time_limit(0); // Unlimited time
+set_time_limit(0);
 ini_set('display_errors', 0);
 error_reporting(0);
 
 $action = isset($_GET['action']) ? trim($_GET['action']) : 'prepare';
 
-// ===== SERVE MODE: Serve a prepared file for download =====
+// Kirim file yang udah siap ke user
 if ($action === 'serve') {
     $fileId = isset($_GET['fileId']) ? trim($_GET['fileId']) : '';
     
-    // Validate fileId to prevent path traversal
     if (empty($fileId) || !preg_match('/^vid_[a-f0-9]+$/', $fileId)) {
         die("Invalid file ID");
     }
@@ -28,14 +27,12 @@ if ($action === 'serve') {
         header('Content-Length: ' . filesize($tempFile));
         header('Cache-Control: no-cache, no-store, must-revalidate');
         
-        // Clear output buffer
         while (ob_get_level() > 0) {
             ob_end_clean();
         }
         
         readfile($tempFile);
         
-        // Cleanup after download
         @unlink($tempFile);
         exit;
     } else {
@@ -43,7 +40,7 @@ if ($action === 'serve') {
     }
 }
 
-// ===== PREPARE MODE: Process video and return file ID =====
+// Proses video dan return file ID
 $url = isset($_GET['url']) ? trim($_GET['url']) : '';
 $quality = isset($_GET['quality']) ? trim($_GET['quality']) : 'hq';
 
@@ -53,7 +50,6 @@ if (empty($url)) {
     exit;
 }
 
-// Basic URL validation
 if (!filter_var($url, FILTER_VALIDATE_URL) && strpos($url, 'ytsearch') !== 0) {
     header('Content-Type: application/json');
     echo json_encode(['success' => false, 'error' => 'Invalid URL format']);
@@ -65,14 +61,14 @@ if (!file_exists($tempDir)) {
     mkdir($tempDir, 0777, true);
 }
 
-// Cleanup old files (> 1 hour) to ensure server disk space remains safe
+// Bersihin file lama (> 1 jam) biar disk ga penuh
 foreach (glob($tempDir . DIRECTORY_SEPARATOR . "*.mp4") as $file) {
     if (filemtime($file) < time() - 3600) {
         @unlink($file);
     }
 }
 
-// OS specifics for yt-dlp path
+// Path yt-dlp sesuai OS
 if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
     $ytDlpPath = __DIR__ . DIRECTORY_SEPARATOR . 'yt-dlp.exe'; 
 } else {
@@ -93,24 +89,23 @@ if (strpos($quality, 'audio') === 0) {
 
 $tempFile = $tempDir . DIRECTORY_SEPARATOR . $fileId . '.' . $ext;
 
-// Format selection logic
+// Pilih format terbaik sesuai kualitas
 if ($quality === 'uhq') {
     $formatStr = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best';
 } elseif (strpos($quality, 'audio') === 0) {
     $formatStr = 'bestaudio/best';
 } elseif ($quality === 'normal') {
     $formatStr = 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best';
-} else { // hq
+} else {
     $formatStr = 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best';
 }
 
-// OS specifics for FFmpeg path
+// Path FFmpeg sesuai OS
 if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
     $ffmpegDir = __DIR__ . DIRECTORY_SEPARATOR . 'ffmpeg-master-latest-win64-gpl-shared' . DIRECTORY_SEPARATOR . 'ffmpeg-master-latest-win64-gpl-shared' . DIRECTORY_SEPARATOR . 'bin';
     $ffmpegFlag = '--ffmpeg-location ' . escapeshellarg($ffmpegDir);
 } else {
-    // Di Linux/Railway, FFmpeg sudah diinstal secara global (/usr/bin/ffmpeg)
-    $ffmpegFlag = ''; // yt-dlp otomatis akan menemukan ffmpeg global
+    $ffmpegFlag = '';
 }
 
 if (strpos($quality, 'audio') === 0) {
@@ -121,7 +116,6 @@ if (strpos($quality, 'audio') === 0) {
 
 $cmd = escapeshellarg($ytDlpPath) . ' -f "' . $formatStr . '" ' . $ffmpegFlag . ' ' . $extraFlags . ' -o ' . escapeshellarg($tempFile) . ' ' . escapeshellarg($url) . ' 2>&1';
 
-// Execute
 $output = shell_exec($cmd);
 
 header('Content-Type: application/json');
