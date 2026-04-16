@@ -4,4 +4,23 @@
         Header set Pragma "no-cache"
         Header set Expires "0"
     </Files>
+
+    <FilesMatch "\.(css|js|ico|png|jpg)$">
+        Header set Cache-Control "max-age=2592000, public"
+    </FilesMatch>
+</IfModule>
+
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/css application/javascript
+</IfModule>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    
+    # Block /temp_videos/ directory from web access
+    RewriteRule ^temp_videos/ - [F,L]
+    
+    # Block direct access to api.php without Referer header
+    RewriteCond %{HTTP_REFERER} !^https?:// [NC]
+    RewriteRule ^api\.php$ - [F,L]
 </IfModule>

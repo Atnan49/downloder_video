@@ -1,4 +1,5 @@
 User-agent: *
+Allow: /*.html$
 Allow: /
 
 # Disallow server-side scripts and temp files

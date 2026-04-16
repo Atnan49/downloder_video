@@ -20,10 +20,16 @@ if ($action === 'serve') {
         $tempFile = $files[0];
         $ext = pathinfo($tempFile, PATHINFO_EXTENSION);
         $quality = isset($_GET['quality']) ? trim($_GET['quality']) : 'hq';
+        $title = isset($_GET['title']) ? trim($_GET['title']) : 'Video';
+        
+        // Membersihkan judul dari karakter aneh dan spasi berlebih
+        $safeTitle = preg_replace('/[^a-zA-Z0-9_\-\s]/', '', $title);
+        $safeTitle = trim(substr($safeTitle, 0, 40));
+        $safeTitle = preg_replace('/\s+/', '_', $safeTitle);
         
         $mime = ($ext === 'mp4') ? 'video/mp4' : 'audio/' . $ext;
         header('Content-Type: ' . $mime);
-        header('Content-Disposition: attachment; filename="t_downloader_' . $quality . '.' . $ext . '"');
+        header('Content-Disposition: attachment; filename="Tarifter.com_' . $safeTitle . '_' . $quality . '.' . $ext . '"');
         header('Content-Length: ' . filesize($tempFile));
         header('Cache-Control: no-cache, no-store, must-revalidate');
         
@@ -113,13 +119,13 @@ $tempFile = $tempDir . DIRECTORY_SEPARATOR . $fileId . '.' . $ext;
 
 // Pilih format terbaik sesuai kualitas
 if ($quality === 'uhq') {
-    $formatStr = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best';
+    $formatStr = 'bestvideo[height<=2160][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=2160]+bestaudio/best';
 } elseif (strpos($quality, 'audio') === 0) {
     $formatStr = 'bestaudio/best';
 } elseif ($quality === 'normal') {
-    $formatStr = 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best';
+    $formatStr = 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best';
 } else {
-    $formatStr = 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best';
+    $formatStr = 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best';
 }
 
 // Path FFmpeg sesuai OS
@@ -136,7 +142,8 @@ if (strpos($quality, 'audio') === 0) {
     $extraFlags = '--merge-output-format mp4';
 }
 
-$cmd = escapeshellarg($ytDlpPath) . ' -f "' . $formatStr . '" ' . $ffmpegFlag . ' ' . $extraFlags . ' -o ' . escapeshellarg($tempFile) . ' ' . escapeshellarg($url) . ' 2>&1';
+$clientBypass = '--extractor-args "youtube:player_client=web,default" --no-warnings';
+$cmd = escapeshellarg($ytDlpPath) . ' ' . $clientBypass . ' -f "' . $formatStr . '" ' . $ffmpegFlag . ' ' . $extraFlags . ' -o ' . escapeshellarg($tempFile) . ' ' . escapeshellarg($url) . ' 2>&1';
 
 $output = shell_exec($cmd);
 

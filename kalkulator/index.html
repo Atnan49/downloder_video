@@ -1,16 +1,15 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 
 <head>
-    <script src="https://quge5.com/88/tag.min.js" data-zone="230034" async data-cfasync="false"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description"
-        content="Tarifter adalah kalkulator PPh 21 TER 2026 untuk simulasi potongan pajak dan estimasi take home pay bulanan sesuai PP No. 58 Tahun 2023.">
-    <title>Tarifter | Kalkulator PPh 21 TER 2026</title>
+        content="Tarifter is a PPh 21 TER 2026 calculator for simulating tax deductions and estimating monthly take-home pay according to PP No. 58 of 2023.">
+    <title>Tarifter | PPh 21 TER 2026 Calculator</title>
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link rel="canonical" href="https://tarifter.com/kalkulator/">
-    <link rel="alternate" hreflang="id" href="https://tarifter.com/kalkulator/">
+    <link rel="alternate" hreflang="en" href="https://tarifter.com/kalkulator/">
     <meta name="robots" content="index, follow">
 
     <!-- Tailwind CSS via CDN -->
@@ -45,8 +44,6 @@
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
 
     <link rel="stylesheet" href="style.css">
-
-    <!-- Adsterra Banners will be placed in the body slots -->
 </head>
 
 <body class="bg-slate-50 font-sans antialiased text-slate-800">
@@ -57,16 +54,10 @@
             <span class="text-emerald-400">Tarifter</span>
         </h1>
         <p class="text-slate-300 max-w-xl mx-auto mb-6 text-sm md:text-base">
-            Simulasikan potongan PPh 21 bulanan secara cepat dan akurat berdasarkan skema Tarif Efektif Rata-rata (PP
+            Easily and accurately simulate your monthly PPh 21 tax deductions based on the Average Effective Rate scheme (PP
             No. 58/2023).
         </p>
-
-        <!-- ================= SLOT IKLAN HEADER (ADSTERRA 728x90) ================= -->
-        <div class="max-w-3xl mx-auto bg-slate-800/50 border border-slate-700 border-dashed rounded-lg p-2 mb-4 flex items-center justify-center min-h-[90px] overflow-hidden">
-            <!-- PASTE ADSTERRA BANNER 728x90 SCRIPT HERE (ID: 29054782) -->
-            <span class="text-xs uppercase tracking-widest text-slate-400">[ Slot Iklan Banner 728x90 ]</span>
-        </div>
-        <!-- ========================================================================= -->
+        <div class="gtranslate_wrapper"></div>
     </header>
 
     <!-- Main Content Application -->
@@ -76,7 +67,7 @@
         <div
             class="md:col-span-7 bg-white rounded-2xl shadow-xl shadow-slate-200/50 p-6 md:p-8 border border-slate-100">
             <h2 class="text-xl font-bold text-navy-800 mb-6 flex items-center gap-2">
-                <i class="ph ph-calculator text-2xl text-emerald-500"></i> Masukkan Data Anda
+                <i class="ph ph-calculator text-2xl text-emerald-500"></i> Enter Your Data
             </h2>
 
             <form id="kalkulator-form" class="space-y-5">
@@ -93,7 +84,7 @@
                             class="w-full pl-12 pr-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-slate-50 text-lg font-bold text-slate-800 transition-colors"
                             placeholder="10.000.000" required>
                     </div>
-                    <p id="gaji-hint" class="text-xs text-slate-500 mt-2">Masukkan nominal gaji bulanan (angka saja).
+                    <p id="gaji-hint" class="text-xs text-slate-500 mt-2">Enter your monthly salary amount (numbers only).
                     </p>
                 </div>
 
@@ -105,20 +96,20 @@
                         <select id="ptkp" name="ptkp"
                             class="w-full pl-4 pr-10 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-slate-50 text-base text-slate-800 appearance-none cursor-pointer transition-colors"
                             required>
-                            <option value="" disabled selected>Pilih Status Pernikahan/Tanggungan...</option>
-                            <optgroup label="Kategori A">
-                                <option value="A">TK/0 (Tidak Kawin, 0 Tanggungan)</option>
-                                <option value="A">TK/1 (Tidak Kawin, 1 Tanggungan)</option>
-                                <option value="A">K/0 (Kawin, 0 Tanggungan)</option>
+                            <option value="" disabled selected>Select Marital/Dependent Status...</option>
+                            <optgroup label="Category A">
+                                <option value="A">TK/0 (Unmarried, 0 Dependents)</option>
+                                <option value="A">TK/1 (Unmarried, 1 Dependent)</option>
+                                <option value="A">K/0 (Married, 0 Dependents)</option>
                             </optgroup>
-                            <optgroup label="Kategori B">
-                                <option value="B">TK/2 (Tidak Kawin, 2 Tanggungan)</option>
-                                <option value="B">TK/3 (Tidak Kawin, 3 Tanggungan)</option>
-                                <option value="B">K/1 (Kawin, 1 Tanggungan)</option>
-                                <option value="B">K/2 (Kawin, 2 Tanggungan)</option>
+                            <optgroup label="Category B">
+                                <option value="B">TK/2 (Unmarried, 2 Dependents)</option>
+                                <option value="B">TK/3 (Unmarried, 3 Dependents)</option>
+                                <option value="B">K/1 (Married, 1 Dependent)</option>
+                                <option value="B">K/2 (Married, 2 Dependents)</option>
                             </optgroup>
-                            <optgroup label="Kategori C">
-                                <option value="C">K/3 (Kawin, 3 Tanggungan)</option>
+                            <optgroup label="Category C">
+                                <option value="C">K/3 (Married, 3 Dependents)</option>
                             </optgroup>
                         </select>
                         <div
@@ -131,7 +122,7 @@
                 <!-- Tombol Hitung -->
                 <button type="submit"
                     class="w-full py-4 mt-4 bg-navy-600 hover:bg-navy-800 text-white font-bold rounded-xl shadow-lg shadow-navy-600/30 transition-all flex items-center justify-center gap-2 active:scale-[0.98]">
-                    <i class="ph ph-magic-wand text-xl"></i> Hitung Pajak Sekarang
+                    <i class="ph ph-magic-wand text-xl"></i> Calculate Tax Now
                 </button>
             </form>
         </div>
@@ -153,25 +144,25 @@
                 <div>
                     <h3
                         class="text-slate-500 text-sm font-semibold uppercase tracking-wider mb-4 flex items-center gap-2">
-                        <i class="ph ph-check-circle text-emerald-500 text-lg"></i> Rincian Potongan
+                        <i class="ph ph-check-circle text-emerald-500 text-lg"></i> Deduction Details
                     </h3>
 
                     <div class="space-y-3">
                         <div class="flex justify-between items-center py-2 border-b border-slate-100">
-                            <span class="text-slate-600 font-medium">Tarif Efektif (TER)</span>
+                            <span class="text-slate-600 font-medium">Effective Rate (TER)</span>
                             <span id="res-persen"
                                 class="font-bold text-navy-800 bg-navy-50 px-2 py-1 rounded text-sm">0%</span>
                         </div>
 
                         <div class="flex justify-between items-center py-2 border-b border-slate-100">
-                            <span class="text-slate-600 font-medium">Potongan PPh 21</span>
+                            <span class="text-slate-600 font-medium">PPh 21 Deduction</span>
                             <span id="res-pajak" class="font-bold text-red-500">- Rp 0</span>
                         </div>
                     </div>
 
                     <div
                         class="mt-6 p-4 bg-gradient-to-br from-emerald-50 to-emerald-100/50 rounded-xl border border-emerald-200">
-                        <span class="block text-emerald-800 text-sm font-bold mb-1">Gaji Bersih / Take Home Pay</span>
+                        <span class="block text-emerald-800 text-sm font-bold mb-1">Net Salary / Take Home Pay</span>
                         <span id="res-thp" class="block text-2xl font-extrabold text-emerald-600">Rp 0</span>
                     </div>
                 </div>
@@ -184,7 +175,7 @@
                     </button>
                     <button id="btn-copy" type="button" disabled
                         class="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl shadow-sm transition-colors flex items-center justify-center gap-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed">
-                        <i class="ph ph-copy text-lg"></i> Salin Hasil
+                        <i class="ph ph-copy text-lg"></i> Copy Result
                     </button>
                 </div>
             </div>
@@ -204,45 +195,38 @@
                 <i class="ph ph-file-xls text-4xl"></i>
             </div>
             <div class="flex-1 text-center sm:text-left">
-                <h3 class="font-extrabold text-navy-800 text-xl mb-2">Template Excel Rekap Gaji &amp; PPh 21 TER</h3>
+                <h3 class="font-extrabold text-navy-800 text-xl mb-2">Salary Recap &amp; PPh 21 TER Excel Template</h3>
                 <p class="text-sm text-slate-600 leading-relaxed">Gunakan template siap pakai dengan formula terstruktur
                     untuk rekap bulanan hingga tahunan, memudahkan proses dokumentasi dan pelaporan pajak.</p>
             </div>
             <a href="https://lynk.id/kalkulatorpph_21_ter_2026/rdqzmy1d5ner/checkout" target="_blank"
                 rel="noopener noreferrer nofollow"
                 class="shrink-0 px-8 py-4 rounded-xl bg-navy-800 text-white font-bold text-sm hover:bg-navy-900 shadow-lg shadow-navy-800/20 active:scale-95 transition-all text-center w-full sm:w-auto flex items-center justify-center gap-2">
-                <i class="ph ph-shopping-cart-simple text-lg"></i> Dapatkan Template Rp25.000
+                <i class="ph ph-shopping-cart-simple text-lg"></i> Get Template Rp25.000
             </a>
         </div>
-
-        <!-- ================= SLOT IKLAN BAWAH (ADSTERRA 300x250) ================= -->
-        <div class="bg-slate-200 border border-slate-300 border-dashed rounded-lg p-2 flex items-center justify-center min-h-[250px] overflow-hidden">
-            <!-- PASTE ADSTERRA BANNER 300x250 SCRIPT HERE (ID: 29049501) -->
-            <span class="text-xs uppercase tracking-widest text-slate-400">[ Slot Iklan Banner 300x250 ]</span>
-        </div>
-        <!-- ========================================================================= -->
     </div>
 
     <!-- SEO Content & Edukasi Perpajakan -->
     <article
         class="max-w-4xl mx-auto px-4 mt-12 mb-20 text-slate-700 leading-relaxed bg-white p-8 rounded-2xl shadow-sm border border-slate-100">
 
-        <h2 class="text-2xl font-bold text-navy-800 mb-4 border-b pb-2">Apa itu PPh 21 TER 2026?</h2>
+        <h2 class="text-2xl font-bold text-navy-800 mb-4 border-b pb-2">What is PPh 21 TER 2026?</h2>
         <p class="mb-5">
-            Tarif Efektif Rata-rata (TER) adalah skema terbaru perhitungan pemotongan Pajak Penghasilan (PPh 21) bagi
-            pegawai tetap yang mulai diatur sejak PP No. 58 Tahun 2023. Aturan ini diterapkan oleh Kementerian Keuangan
-            untuk menyederhanakan perhitungan pajak agar lebih transparan. Anda tidak perlu lagi repot menghitung biaya
-            jabatan dan iuran pensiun pada hitungan bulanan, cukup mengalikan Gaji Bruto dengan persentase TER sesuai
-            status PTKP Anda.
+            The Average Effective Rate (TER) is the newest calculation scheme for Income Tax (PPh 21) deductions for
+            permanent employees as regulated by PP No. 58 of 2023. Applied by the Ministry of Finance to simplify
+            tax calculation to be more transparent. You no longer need to calculate position costs and pension contributions
+            on a monthly basis, simply multiply your Gross Salary by the TER percentage according to
+            your PTKP status.
         </p>
 
-        <h3 class="text-lg font-bold text-navy-800 mb-3 mt-8">Perbedaan Kategori TER A, B, dan C</h3>
-        <p class="mb-4">Untuk mempermudah wajib pajak, pemerintah membagi status Penghasilan Tidak Kena Pajak (PTKP)
-            menjadi tiga kategori utama:</p>
+        <h3 class="text-lg font-bold text-navy-800 mb-3 mt-8">Differences Between TER Categories A, B, and C</h3>
+        <p class="mb-4">To simplify matters for taxpayers, the government divides the Non-Taxable Income (PTKP) status
+            into three main categories:</p>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
             <div class="bg-slate-50 border border-slate-200 p-4 rounded-xl">
-                <h4 class="font-bold text-emerald-600 mb-2">Kategori A</h4>
+                <h4 class="font-bold text-emerald-600 mb-2">Category A</h4>
                 <ul class="text-sm list-disc pl-4 space-y-1">
                     <li>Tidak Kawin tanpa tanggungan (TK/0)</li>
                     <li>Tidak Kawin dgn 1 tanggungan (TK/1)</li>
@@ -250,7 +234,7 @@
                 </ul>
             </div>
             <div class="bg-slate-50 border border-slate-200 p-4 rounded-xl">
-                <h4 class="font-bold text-emerald-600 mb-2">Kategori B</h4>
+                <h4 class="font-bold text-emerald-600 mb-2">Category B</h4>
                 <ul class="text-sm list-disc pl-4 space-y-1">
                     <li>Tidak Kawin dgn 2 tanggungan (TK/2)</li>
                     <li>Tidak Kawin dgn 3 tanggungan (TK/3)</li>
@@ -259,7 +243,7 @@
                 </ul>
             </div>
             <div class="bg-slate-50 border border-slate-200 p-4 rounded-xl">
-                <h4 class="font-bold text-emerald-600 mb-2">Kategori C</h4>
+                <h4 class="font-bold text-emerald-600 mb-2">Category C</h4>
                 <ul class="text-sm list-disc pl-4 space-y-1">
                     <li>Kawin dgn 3 tanggungan (K/3)</li>
                 </ul>
@@ -267,14 +251,34 @@
         </div>
 
         <div class="bg-amber-50 border-l-4 border-amber-400 p-4 rounded-r-xl text-sm text-amber-800">
-            <strong class="font-bold block mb-1">Disclaimer Hukum:</strong>
-            Hasil perhitungan pada halaman ini merupakan simulasi untuk kebutuhan edukasi dan proyeksi mandiri.
-            Perhitungan resmi pada masa pajak Desember (akhir tahun) dapat berbeda karena menyesuaikan Tarif Pasal 17 UU
+            <strong class="font-bold block mb-1">Legal Disclaimer:</strong>
+            The calculation result on this page is a simulation for educational and self-projection purposes.
+            Official calculation on December tax may vary since it adjusts to Article 17 of Income Tax Law
             PPh
-            serta komponen payroll lain di perusahaan. Untuk angka final, silakan konfirmasi kepada HRD, tim payroll,
-            atau konsultan pajak tersertifikasi.
+            and other payroll components. For final figures, please confirm with your HRD, payroll team,
+            or certified tax consultant.
         </div>
     </article>
+
+    <!-- Modal Sponsor Unlock (Click to Unlock) -->
+    <div id="adModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 hidden">
+        <div class="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl text-center">
+            <h3 class="font-bold text-xl text-navy-800 mb-2">Unlock Calculation Results</h3>
+            <p class="text-sm text-slate-600 mb-4">To view your PPh 21 calculation results, please support us by briefly visiting our sponsor.</p>
+            
+            <div style="margin: 20px 0;">
+                <a href="https://www.profitablecpmratenetwork.com/bq5bb4z7?key=9a37fedd4aecc873e20314b6bc945d2e" id="sponsorLinkBtn" target="_blank" class="inline-block w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl shadow-md transition-colors text-sm text-center">
+                    <i class="ph ph-arrow-square-out text-lg align-middle mr-1"></i> Visit Sponsor
+                </a>
+            </div>
+
+            <div class="mt-2">
+                <button id="skipAdBtn" disabled class="w-full py-3 bg-slate-100 text-slate-400 font-bold rounded-xl text-sm transition-colors cursor-not-allowed">
+                    Click the sponsor link above first...
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- Footer -->
     <footer class="bg-navy-900 text-slate-400 py-6 text-center text-sm">
@@ -287,10 +291,12 @@
             <span>·</span>
             <a href="/terms.html" class="hover:text-emerald-400 transition-colors">Terms</a>
         </div>
-        <p>&copy; 2026 Tarifter — Kalkulator PPh 21 TER. Seluruh hak cipta dilindungi.</p>
+        <p>&copy; 2026 Tarifter — Kalkulator PPh 21 TER. All rights reserved.</p>
     </footer>
 
     <script src="script.js"></script>
+    <script>window.gtranslateSettings = {"default_language":"en","native_language_names":true,"detect_browser_language":true,"languages":["id","en","es","fr","de","ar","ru","pt"],"wrapper_selector":".gtranslate_wrapper"}</script>
+    <script src="https://cdn.gtranslate.net/widgets/latest/dropdown.js" defer></script>
 </body>
 
 </html>
