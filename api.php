@@ -93,7 +93,14 @@ try {
         }
     }
 
-    $cmd = escapeshellcmd($ytDlpPath) . ' -J --no-playlist --no-warnings ' . escapeshellarg($url) . ' 2>&1';
+    $cmd = escapeshellcmd($ytDlpPath) . ' -J --no-playlist --no-warnings ';
+    
+    $cookiesFile = __DIR__ . DIRECTORY_SEPARATOR . 'cookies.txt';
+    if (file_exists($cookiesFile)) {
+        $cmd .= '--cookies ' . escapeshellarg($cookiesFile) . ' ';
+    }
+    
+    $cmd .= escapeshellarg($url) . ' 2>&1';
 
     $output = shell_exec($cmd);
 
