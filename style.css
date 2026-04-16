@@ -646,3 +646,60 @@ select.gt_selector option, select[class*="gt_"] option {
     background: #1a1a2e !important;
     color: #fff !important;
 }
+/* Posisikan Dropdown Bahasa GTranslate di Kanan Atas dan Percantik Tampilannya */
+.gtranslate_wrapper {
+    position: absolute !important;
+    top: 25px;
+    right: 25px;
+    z-index: 9999;
+}
+
+.gtranslate_wrapper select {
+    background-color: rgba(0, 0, 0, 0.4) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    color: #fff !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    border-radius: 12px !important;
+    padding: 8px 32px 8px 12px !important;
+    font-family: 'Outfit', sans-serif !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    outline: none !important;
+    cursor: pointer !important;
+    transition: all 0.3s ease !important;
+    
+    appearance: none !important;
+    -moz-appearance: none !important;
+    -webkit-appearance: none !important;
+    
+    background-image: url('data:image/svg+xml;utf8,<svg fill="white" height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M7 10l5 5 5-5z"/><path d="M0 0h24v24H0z" fill="none"/></svg>') !important;
+    background-repeat: no-repeat !important;
+    background-position: right 6px center !important;
+    background-size: 16px !important;
+}
+
+.gtranslate_wrapper select:hover, .gtranslate_wrapper select:focus {
+    border-color: #4facfe !important;
+    box-shadow: 0 0 15px rgba(79, 172, 254, 0.3) !important;
+    background-color: rgba(30, 30, 50, 0.6) !important;
+}
+
+.gtranslate_wrapper select option {
+    background-color: #111 !important;
+    color: #fff !important;
+    padding: 10px !important;
+    font-family: 'Outfit', sans-serif !important;
+}
+
+@media (max-width: 768px) {
+    .gtranslate_wrapper {
+        top: 15px;
+        right: 15px;
+    }
+    .gtranslate_wrapper select {
+        padding: 6px 26px 6px 10px !important;
+        font-size: 12px !important;
+        border-radius: 8px !important;
+    }
+}
