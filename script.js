@@ -316,82 +316,49 @@ document.addEventListener('DOMContentLoaded', () => {
         
         modal.classList.remove('hidden');
         
-        const hasAd = Math.random() > 0.3;
-        
-        const modalTitle = modal.querySelector('.modal-title');
-        const modalDesc = modal.querySelector('.modal-desc');
-        const adContainer = modal.querySelector('.ad-container');
         const sBtn = document.getElementById('skipAdBtn');
-
-        if (hasAd) {
-            modalTitle.textContent = 'Support Us';
-            modalDesc.textContent = 'Watch this short ad to unlock high-quality downloads (HD/4K).';
-            adContainer.innerHTML = '';
-            
-            try {
-                // 1. Buat div container untuk Adsterra
-                adContainer.innerHTML = '<div id="container-048a354770d57ed3a313e19c0774d3f7"></div>';
-                
-                // 2. Inject script Adsterra ke dalam container
-                let script = document.createElement("script");
-                script.async = true;
-                script.setAttribute("data-cfasync", "false");
-                script.src = "https://pl29158084.profitablecpmratenetwork.com/048a354770d57ed3a313e19c0774d3f7/invoke.js";
-                adContainer.appendChild(script);
-
-            } catch (e) {
-                console.warn('Ad failed to load:', e);
-                adContainer.innerHTML = '<p style="color: var(--text-muted); padding: 2rem;">Loading ad...</p>';
-            }
-            secondsLeft = 10;
-        } else {
-            modalTitle.textContent = 'Please Wait...';
-            modalDesc.textContent = 'No ads available right now. You can continue your download in a few seconds.';
-            
-            // 3. Bersihkan blok else ini agar tidak memanggil iklan
-            adContainer.innerHTML = '<p style="color: var(--secondary-color);"><i class="fa-solid fa-hourglass-half fa-spin fa-2x"></i><br><br>Preparing your high-quality download link...</p>';
-            
-            secondsLeft = 5;
-        }
+        const spLink = document.getElementById('sponsorLinkBtn');
 
         if (sBtn) {
             sBtn.classList.remove('ready');
             sBtn.disabled = true;
-            sBtn.textContent = '⏳ Loading ad...';
+            sBtn.textContent = 'Click the sponsor link above first...';
+            // Reset styles in case it was opened before
+            sBtn.style.background = '';
+            sBtn.style.color = '';
+            sBtn.style.cursor = 'not-allowed';
         }
+        
+        if (spLink) {
+            // Reset pointer events for new modal open
+            spLink.style.pointerEvents = 'auto';
+            spLink.style.opacity = '1';
 
-        function startCountdown() {
-            if (sBtn) {
-                sBtn.textContent = hasAd ? `⏳ Please watch the ad (${secondsLeft}s...)` : `⏳ Wait (${secondsLeft}s...)`;
-            }
-            skipTimer = setInterval(() => {
-                const currentBtn = document.getElementById('skipAdBtn');
-                secondsLeft--;
-                if (secondsLeft > 0) {
-                    if (currentBtn) currentBtn.textContent = hasAd ? `⏳ Please watch the ad (${secondsLeft}s...)` : `⏳ Wait (${secondsLeft}s...)`;
-                } else {
-                    clearInterval(skipTimer);
-                    if (currentBtn) {
-                        currentBtn.classList.add('ready');
-                        currentBtn.disabled = false;
-                        currentBtn.innerHTML = hasAd ? 'Skip Ad & Download <i class="fa-solid fa-download"></i>' : 'Continue Download <i class="fa-solid fa-download"></i>';
-                    }
-                }
-            }, 1000);
-        }
+            // Unlock functionality when clicked
+            spLink.onclick = function() {
+                if (sBtn && sBtn.disabled) {
+                    spLink.style.pointerEvents = 'none';
+                    spLink.style.opacity = '0.7';
 
-        if (hasAd) {
-            let adCheckCount = 0;
-            const adChecker = setInterval(() => {
-                adCheckCount++;
-                const iframe = adContainer.querySelector('iframe');
-                if (iframe || adCheckCount >= 10) {
-                    clearInterval(adChecker);
-                    startCountdown();
+                    let timeLeft = 5;
+                    sBtn.textContent = `Unlocking in ${timeLeft}s...`;
+                    
+                    const countdownTimer = setInterval(() => {
+                        timeLeft--;
+                        if (timeLeft > 0) {
+                            sBtn.textContent = `Unlocking in ${timeLeft}s...`;
+                        } else {
+                            clearInterval(countdownTimer);
+                            sBtn.classList.add('ready');
+                            sBtn.disabled = false;
+                            sBtn.textContent = 'Download Now';
+                            sBtn.style.background = '#38ef7d';
+                            sBtn.style.color = '#111';
+                            sBtn.style.cursor = 'pointer';
+                        }
+                    }, 1000);
                 }
-            }, 500);
-        } else {
-            startCountdown();
+            };
         }
     }
 

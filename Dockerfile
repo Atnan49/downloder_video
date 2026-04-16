@@ -3,9 +3,8 @@ FROM php:8.2-apache
 RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     ffmpeg \
-    python3 \
     && rm -rf /var/lib/apt/lists/* \
-    && wget -qO /usr/local/bin/yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
+    && wget -qO /usr/local/bin/yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux \
     && chmod a+rx /usr/local/bin/yt-dlp \
     && a2enmod rewrite \
     && mkdir -p /var/www/html/temp_videos \

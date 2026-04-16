@@ -95,7 +95,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function showCopySuccess() {
         const originalHTML = btnCopy.innerHTML;
-        btnCopy.innerHTML = '<i class="ph ph-check font-bold"></i> Tersalin!';
+        btnCopy.innerHTML = '<i class="ph ph-check font-bold"></i> Copied!';
         btnCopy.classList.remove('bg-slate-100', 'text-slate-700');
         btnCopy.classList.add('bg-emerald-100', 'text-emerald-700');
         updateStatusMessage('Hasil kalkulasi berhasil disalin.');
@@ -132,55 +132,112 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const bruto = unformatRupiah(brutoStr);
         if (bruto <= 0) {
-            alert('Nominal gaji harus lebih dari 0.');
+            alert('Salary amount must be greater than 0.');
             setActionButtonsState(false);
-            updateStatusMessage('Nominal gaji tidak valid.');
+            updateStatusMessage('Invalid salary amount.');
             return;
         }
 
-        const ratePersen = getTarifTER(bruto, ptkpKategori);
-        const potonganPajak = Math.floor(bruto * (ratePersen / 100));
-        const thp = bruto - potonganPajak;
+        const executeKalkulasi = () => {
+            const ratePersen = getTarifTER(bruto, ptkpKategori);
+            const potonganPajak = Math.floor(bruto * (ratePersen / 100));
+            const thp = bruto - potonganPajak;
 
-        resPersen.innerText = `${ratePersen}%`;
-        resPajak.innerText = `- Rp ${formatRupiah(potonganPajak)}`;
-        resThp.innerText = `Rp ${formatRupiah(thp)}`;
+            resPersen.innerText = `${ratePersen}%`;
+            resPajak.innerText = `- Rp ${formatRupiah(potonganPajak)}`;
+            resThp.innerText = `Rp ${formatRupiah(thp)}`;
 
-        emptyState.classList.add('hidden');
-        resultContainer.classList.remove('hidden');
-        setActionButtonsState(true);
+            emptyState.classList.add('hidden');
+            resultContainer.classList.remove('hidden');
+            setActionButtonsState(true);
 
-        const publicUrl = 'https://tarifter.com/kalkulator/';
-        latestResultText = [
-            'Simulasi PPh 21 TER 2026 - Tarifter',
-            '',
-            `Gaji Bruto: Rp ${formatRupiah(bruto)}`,
-            `Status PTKP: ${ptkpLabel}`,
-            `Kategori TER: ${ptkpKategori}`,
-            `Tarif TER: ${ratePersen}%`,
-            `Potongan PPh 21: Rp ${formatRupiah(potonganPajak)}`,
-            `Take Home Pay: Rp ${formatRupiah(thp)}`,
-            '',
-            `Hitung simulasi Anda di: ${publicUrl}`
-        ].join('\n');
+            const publicUrl = 'https://tarifter.com/kalkulator/';
+            latestResultText = [
+                'Simulasi PPh 21 TER 2026 - Tarifter',
+                '',
+                `Gross Salary: Rp ${formatRupiah(bruto)}`,
+                `PTKP Status: ${ptkpLabel}`,
+                `TER Category: ${ptkpKategori}`,
+                `TER Rate: ${ratePersen}%`,
+                `PPh 21 Deduction: Rp ${formatRupiah(potonganPajak)}`,
+                `Take Home Pay: Rp ${formatRupiah(thp)}`,
+                '',
+                `Calculate your simulation at: ${publicUrl}`
+            ].join('\n');
 
-        updateStatusMessage('Hasil kalkulasi sudah tersedia untuk dibagikan atau disalin.');
+            updateStatusMessage('Calculation results are ready to be shared or copied.');
+        };
+
+        const adModal = document.getElementById('adModal');
+        const sBtn = document.getElementById('skipAdBtn');
+        const spLink = document.getElementById('sponsorLinkBtn');
+
+        if (adModal && sBtn && spLink) {
+            adModal.classList.remove('hidden');
+
+            sBtn.disabled = true;
+            sBtn.textContent = 'Click the sponsor link above first...';
+            // Reset state in case modal was opened before
+            sBtn.classList.replace('bg-navy-600', 'bg-slate-100');
+            sBtn.classList.replace('bg-[#38ef7d]', 'bg-slate-100');
+            sBtn.classList.replace('text-white', 'text-slate-400');
+            sBtn.classList.replace('text-slate-800', 'text-slate-400');
+            sBtn.classList.remove('hover:bg-navy-700', 'hover:bg-[#34d399]');
+            sBtn.classList.add('cursor-not-allowed');
+            
+            spLink.style.pointerEvents = 'auto';
+            spLink.style.opacity = '1';
+
+            spLink.onclick = function(evt) {
+                if (sBtn.disabled) {
+                    spLink.style.pointerEvents = 'none';
+                    spLink.style.opacity = '0.7';
+
+                    let timeLeft = 5;
+                    sBtn.textContent = `Unlocking in ${timeLeft}s...`;
+                    
+                    const countdownTimer = setInterval(() => {
+                        timeLeft--;
+                        if (timeLeft > 0) {
+                            sBtn.textContent = `Unlocking in ${timeLeft}s...`;
+                        } else {
+                            clearInterval(countdownTimer);
+                            sBtn.disabled = false;
+                            sBtn.classList.replace('bg-slate-100', 'bg-[#38ef7d]');
+                            sBtn.classList.replace('text-slate-400', 'text-slate-800');
+                            sBtn.classList.remove('cursor-not-allowed');
+                            sBtn.classList.add('hover:bg-[#34d399]');
+                            sBtn.textContent = 'Calculate PPh 21 Tax Result';
+                        }
+                    }, 1000);
+                }
+            };
+
+            sBtn.onclick = function(evt) {
+                if (!sBtn.disabled) {
+                    adModal.classList.add('hidden');
+                    executeKalkulasi();
+                }
+            };
+        } else {
+            executeKalkulasi();
+        }
     });
 
     btnWA.addEventListener('click', () => {
         if (!latestResultText) {
-            alert('Hitung dulu pajak Anda sebelum membagikan hasil.');
+            alert('Calculate your tax before sharing the result.');
             return;
         }
 
         const waUrl = `https://wa.me/?text=${encodeURIComponent(latestResultText)}`;
         window.open(waUrl, '_blank', 'noopener');
-        updateStatusMessage('Membuka WhatsApp untuk membagikan hasil kalkulasi.');
+        updateStatusMessage('Opening WhatsApp to share calculation results.');
     });
 
     btnCopy.addEventListener('click', async () => {
         if (!latestResultText) {
-            alert('Belum ada hasil untuk disalin. Silakan hitung dulu.');
+            alert('No result to copy. Please calculate first.');
             return;
         }
 
@@ -208,8 +265,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             showCopySuccess();
         } catch (error) {
-            alert('Gagal menyalin hasil. Coba lagi.');
-            updateStatusMessage('Gagal menyalin hasil kalkulasi.');
+            alert('Failed to copy result. Try again.');
+            updateStatusMessage('Failed to copy calculation result.');
         }
     });
 });
