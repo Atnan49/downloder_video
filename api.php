@@ -10,6 +10,29 @@ ini_set('display_errors', 0);
 error_reporting(0);
 
 try {
+    $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    $rlFile = '/tmp/rl_' . md5($ip) . '.json';
+    if (!is_dir('/tmp')) {
+        @mkdir('/tmp', 0777, true);
+    }
+
+    $now = time();
+    $rlData = ['count' => 1, 'timestamp' => $now];
+
+    if (file_exists($rlFile)) {
+        $saved = json_decode(file_get_contents($rlFile), true);
+        if ($saved && ($now - $saved['timestamp']) < 60) {
+            if ($saved['count'] >= 10) {
+                http_response_code(429);
+                echo json_encode(['success' => false, 'error' => 'Too many requests']);
+                exit;
+            }
+            $rlData['count'] = $saved['count'] + 1;
+            $rlData['timestamp'] = $saved['timestamp'];
+        }
+    }
+    file_put_contents($rlFile, json_encode($rlData));
+
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         respondWithError('Invalid request method');
     }
@@ -23,6 +46,15 @@ try {
 
     if (!filter_var($url, FILTER_VALIDATE_URL)) {
         respondWithError('Invalid URL format');
+    }
+
+    $cacheFile = '/tmp/' . md5($url) . '.json';
+    if (!is_dir('/tmp')) {
+        @mkdir('/tmp', 0777, true);
+    }
+    if (file_exists($cacheFile) && (time() - filemtime($cacheFile) < 1800)) {
+        echo file_get_contents($cacheFile);
+        exit;
     }
 
     // Spotify ga bisa langsung, jadi scrape judul terus cari di YouTube
@@ -154,7 +186,10 @@ try {
         $response['best_url'] = $videoData['url'];
     }
 
-    echo json_encode($response);
+    $finalJson = json_encode($response);
+    file_put_contents($cacheFile, $finalJson);
+    
+    echo $finalJson;
 } catch (Exception $e) {
     respondWithError('Server PHP Error: ' . $e->getMessage());
 }
