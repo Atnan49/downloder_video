@@ -83,115 +83,158 @@ try {
         }
     }
 
-    // Deteksi path yt-dlp sesuai OS
-    if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-        $ytDlpPath = __DIR__ . DIRECTORY_SEPARATOR . 'yt-dlp.exe';
-    } else {
-        $ytDlpPath = '/usr/local/bin/yt-dlp';
-        if (!file_exists($ytDlpPath)) {
-            $ytDlpPath = __DIR__ . DIRECTORY_SEPARATOR . 'yt-dlp';
-        }
-    }
+    // Request to Cobalt API
+    $cobaltData = [
+        'url' => $url,
+        'vQuality' => '1080',
+        'isAudioOnly' => false,
+        'filenameStyle' => 'basic'
+    ];
 
-    $cmd = escapeshellcmd($ytDlpPath) . ' -J --no-playlist --no-warnings ';
+    $ch = curl_init('https://api.cobalt.tools/api/json');
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($cobaltData));
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Accept: application/json',
+        'Content-Type: application/json',
+        'Origin: https://cobalt.tools',
+        'Referer: https://cobalt.tools/',
+        'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
+    ]);
     
-    $cookiesFile = __DIR__ . DIRECTORY_SEPARATOR . 'cookies.txt';
-    if (file_exists($cookiesFile)) {
-        $cmd .= '--cookies ' . escapeshellarg($cookiesFile) . ' ';
-    }
-    
-    $cmd .= escapeshellarg($url) . ' 2>&1';
+    // Local dev workaround if needed, but acceptable defaults for Railway
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
 
-    $output = shell_exec($cmd);
+    $output = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
 
-    if ($output === null || trim($output) === '') {
-        respondWithError('Gagal menjalankan yt-dlp. Output kosong, cek izin atau antivirus.');
+    if ($output === false) {
+        respondWithError('Cobalt API Error: ' . $curlError);
     }
 
     $videoData = json_decode($output, true);
 
-    if ($videoData === null) {
-        $cleanError = substr($output, 0, 500);
-        respondWithError('yt-dlp error: ' . $cleanError);
-    }
-
-    // Kalau dari ytsearch (fallback Spotify), ambil entry pertama
-    if (isset($videoData['_type']) && $videoData['_type'] === 'playlist' && !empty($videoData['entries'])) {
-        $videoData = $videoData['entries'][0];
+    if ($videoData === null || (isset($videoData['status']) && $videoData['status'] === 'error')) {
+        $cleanError = $videoData['text'] ?? 'Unknown Cobalt API error';
+        respondWithError('Cobalt API error: ' . $cleanError);
     }
 
     $response = [
         'success' => true,
-        'title' => $videoData['title'] ?? 'Unknown Title',
-        'thumbnail' => $videoData['thumbnail'] ?? '',
-        'duration_string' => isset($videoData['duration_string']) ? $videoData['duration_string'] : (isset($videoData['duration']) ? gmdate("i:s", $videoData['duration']) : 'Unknown'),
-        'extractor' => $videoData['extractor'] ?? 'Unknown',
+        'title' => isset($videoData['filename']) ? preg_replace('/.[^.s]{3,4}$/', '', $videoData['filename']) : 'Video Download',
+        'thumbnail' => '',
+        'duration_string' => 'Unknown',
+        'extractor' => 'Cobalt',
         'formats' => []
     ];
 
-    $formats = $videoData['formats'] ?? [];
     $filteredFormats = [];
 
-    foreach ($formats as $f) {
-        if (isset($f['url']) && strpos($f['url'], 'http') === 0) {
-            
-            $height = isset($f['height']) ? $f['height'] : 0;
-            $vcodec = $f['vcodec'] ?? 'none';
-            $acodec = $f['acodec'] ?? 'none';
-            
-            // Audio only
-            if ($vcodec === 'none' && $acodec !== 'none') {
-                $filteredFormats[] = [
-                    'format_id' => $f['format_id'] ?? '',
-                    'ext' => $f['ext'] ?? 'mp3',
-                    'height' => 'Audio',
-                    'url' => $f['url'],
-                    'quality_label' => 'audio',
-                    'format_note' => $f['format_note'] ?? 'Audio Only',
-                    'abr' => $f['abr'] ?? 0
-                ];
-                continue; 
-            }
-
-            // Video + audio, atau video HD yang nanti di-merge
-            if (($vcodec !== 'none' && $acodec !== 'none') || ($vcodec !== 'none' && $height >= 1080)) {
-                $qualityLabel = 'normal';
-                if ($height >= 1080) {
-                    $qualityLabel = 'hq';
-                }
-                if ($height >= 2160) {
-                    $qualityLabel = 'uhq';
-                }
-
-                $filteredFormats[] = [
-                    'format_id' => $f['format_id'] ?? '',
-                    'ext' => $f['ext'] ?? 'mp4',
-                    'height' => $height,
-                    'url' => $f['url'],
-                    'quality_label' => $qualityLabel,
-                    'format_note' => $f['format_note'] ?? ($height . 'p')
-                ];
-            }
-        }
-    }
-
-    // Fallback ke direct URL kalau ga ada format yg cocok
-    if (empty($filteredFormats) && isset($videoData['url'])) {
+    // Map Cobalt stream/redirect response
+    if (isset($videoData['url'])) {
+        // Assume this URL can be used for normal download
         $filteredFormats[] = [
-            'format_id' => 'direct',
-            'ext' => $videoData['ext'] ?? 'mp4',
+            'format_id' => 'cobalt_direct',
+            'ext' => 'mp4',
             'height' => 'Source',
             'url' => $videoData['url'],
             'quality_label' => 'normal',
-            'format_note' => 'Best Quality'
+            'format_note' => 'Video'
         ];
+        // Ensure buttons don't break
+        $filteredFormats[] = [
+            'format_id' => 'cobalt_hq',
+            'ext' => 'mp4',
+            'height' => '1080',
+            'url' => $videoData['url'],
+            'quality_label' => 'hq',
+            'format_note' => 'HD Video'
+        ];
+        $filteredFormats[] = [
+            'format_id' => 'cobalt_uhq',
+            'ext' => 'mp4',
+            'height' => '4K',
+            'url' => $videoData['url'],
+            'quality_label' => 'uhq',
+            'format_note' => '4K Video'
+        ];
+        if (isset($videoData['audio'])) {
+            $filteredFormats[] = [
+                'format_id' => 'cobalt_audio',
+                'ext' => 'mp3',
+                'height' => 'Audio',
+                'url' => $videoData['audio'],
+                'quality_label' => 'audio',
+                'format_note' => 'Audio Only'
+            ];
+        }
+    } elseif (isset($videoData['picker']) && is_array($videoData['picker'])) {
+        foreach ($videoData['picker'] as $item) {
+            $qualityLabel = 'normal';
+            if (isset($item['quality'])) {
+                if (strpos($item['quality'], '1080') !== false || strpos($item['quality'], '720') !== false) {
+                    $qualityLabel = 'hq';
+                } elseif (strpos($item['quality'], '2160') !== false || strpos($item['quality'], '1440') !== false || strpos($item['quality'], '4k') !== false || strpos($item['quality'], '4K') !== false) {
+                    $qualityLabel = 'uhq';
+                }
+            }
+            
+            $filteredFormats[] = [
+                'format_id' => $item['id'] ?? 'picker_item',
+                'ext' => 'mp4',
+                'height' => $item['quality'] ?? 'Source',
+                'url' => $item['url'],
+                'quality_label' => $qualityLabel,
+                'format_note' => $item['quality'] ?? 'Video'
+            ];
+        }
+        
+        // Add minimal required buttons if picker is missing some
+        $hasHq = false;
+        $hasUhq = false;
+        $normalUrl = $videoData['picker'][0]['url'] ?? '';
+        foreach ($filteredFormats as $f) {
+            if ($f['quality_label'] === 'hq') $hasHq = true;
+            if ($f['quality_label'] === 'uhq') $hasUhq = true;
+        }
+        
+        if (!$hasHq && $normalUrl) {
+            $filteredFormats[] = ['format_id' => 'cobalt_hq', 'ext' => 'mp4', 'height' => '1080', 'url' => $normalUrl, 'quality_label' => 'hq', 'format_note' => 'HD Video'];
+        }
+        if (!$hasUhq && $normalUrl) {
+            $filteredFormats[] = ['format_id' => 'cobalt_uhq', 'ext' => 'mp4', 'height' => '4K', 'url' => $normalUrl, 'quality_label' => 'uhq', 'format_note' => '4K Video'];
+        }
+        
+        if (isset($videoData['audio'])) {
+            $filteredFormats[] = [
+                'format_id' => 'cobalt_audio',
+                'ext' => 'mp3',
+                'height' => 'Audio',
+                'url' => $videoData['audio'],
+                'quality_label' => 'audio',
+                'format_note' => 'Audio Only'
+            ];
+        }
+    }
+
+    if (empty($filteredFormats)) {
+         respondWithError('No downloadable formats found from Cobalt.');
+    }
+
+    // Ensure we at least have 'normal' for UI
+    $hasNormal = false;
+    foreach ($filteredFormats as $f) {
+        if ($f['quality_label'] === 'normal') $hasNormal = true;
+    }
+    if (!$hasNormal) {
+         $filteredFormats[0]['quality_label'] = 'normal';
     }
 
     $response['formats'] = array_values($filteredFormats);
-
-    if (isset($videoData['url'])) {
-        $response['best_url'] = $videoData['url'];
-    }
+    $response['best_url'] = $filteredFormats[0]['url'];
 
     $finalJson = json_encode($response);
     file_put_contents($cacheFile, $finalJson);
