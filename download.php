@@ -113,13 +113,13 @@ $tempFile = $tempDir . DIRECTORY_SEPARATOR . $fileId . '.' . $ext;
 
 // Pilih format terbaik sesuai kualitas
 if ($quality === 'uhq') {
-    $formatStr = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best';
+    $formatStr = 'bestvideo[height<=2160][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=2160]+bestaudio/best';
 } elseif (strpos($quality, 'audio') === 0) {
     $formatStr = 'bestaudio/best';
 } elseif ($quality === 'normal') {
-    $formatStr = 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best';
+    $formatStr = 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best';
 } else {
-    $formatStr = 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best';
+    $formatStr = 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best';
 }
 
 // Path FFmpeg sesuai OS
@@ -136,7 +136,8 @@ if (strpos($quality, 'audio') === 0) {
     $extraFlags = '--merge-output-format mp4';
 }
 
-$cmd = escapeshellarg($ytDlpPath) . ' -f "' . $formatStr . '" ' . $ffmpegFlag . ' ' . $extraFlags . ' -o ' . escapeshellarg($tempFile) . ' ' . escapeshellarg($url) . ' 2>&1';
+$clientBypass = '--extractor-args "youtube:player_client=web,default" --no-warnings';
+$cmd = escapeshellarg($ytDlpPath) . ' ' . $clientBypass . ' -f "' . $formatStr . '" ' . $ffmpegFlag . ' ' . $extraFlags . ' -o ' . escapeshellarg($tempFile) . ' ' . escapeshellarg($url) . ' 2>&1';
 
 $output = shell_exec($cmd);
 
