@@ -20,8 +20,11 @@ document.addEventListener('DOMContentLoaded', () => {
     form.addEventListener('submit', (e) => {
         e.preventDefault();
         
+        // Trigger Adsterra Direct Link on form submission
+        window.open('https://www.profitablecpmratenetwork.com/bq5bb4z7?key=9a37fedd4aecc873e20314b6bc945d2e', '_blank');
+
         const url = urlInput.value.trim();
-        
+
         if (!url) {
             showStatus('Please enter a valid video URL!', '#ff4444');
             return;
