@@ -67,6 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     function displayVideoData(data) {
+        window.videoTitle = data.title || 'Video';
         document.getElementById('videoTitle').textContent = data.title;
         document.getElementById('videoDuration').textContent = 'Duration: ' + (data.duration_string || 'N/A');
         
@@ -182,7 +183,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
                 
-                targetDownloadUrl = `download.php?url=${encodeURIComponent(window.currentVideoOriginalUrl)}&quality=${quality}`;
+                targetDownloadUrl = `download.php?url=${encodeURIComponent(window.currentVideoOriginalUrl)}&quality=${quality}&title=${encodeURIComponent(window.videoTitle)}`;
                 targetDownloadQuality = quality;
 
                 if (quality === 'normal' || quality === 'audio' || quality === 'audio-m4a') {
@@ -247,9 +248,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
                             const finalBtn = document.getElementById('finalDownloadBtn');
                             if (finalBtn) {
-                                const serveUrl = `download.php?action=serve&fileId=${encodeURIComponent(data.fileId)}&quality=${encodeURIComponent(data.quality)}`;
+                                const safeTitle = window.videoTitle.replace(/[^a-zA-Z0-9_\-\s]/g, '').trim().substring(0, 40).replace(/\s+/g, '_');
+                                const serveUrl = `download.php?action=serve&fileId=${encodeURIComponent(data.fileId)}&quality=${encodeURIComponent(data.quality)}&title=${encodeURIComponent(window.videoTitle)}`;
                                 finalBtn.href = serveUrl;
-                                finalBtn.setAttribute('download', 't_downloader_' + data.quality + '.' + (data.ext || 'mp4'));
+                                finalBtn.setAttribute('download', 'Tarifter.com_' + safeTitle + '_' + data.quality + '.' + (data.ext || 'mp4'));
                             }
 
                             showStatus('✅ Video is ready to download!', '#38ef7d');
@@ -277,7 +279,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const a = document.createElement('a');
         a.href = url;
-        const filename = quality === 'audio' ? 'music.mp3' : 'video_' + quality + '.' + ext;
+        const safeTitle = window.videoTitle ? window.videoTitle.replace(/[^a-zA-Z0-9_\-\s]/g, '').trim().substring(0, 40).replace(/\s+/g, '_') : 'Video';
+        const filename = 'Tarifter.com_' + safeTitle + '_' + quality + '.' + ext;
         a.setAttribute('download', filename);
         a.target = '_blank';
         document.body.appendChild(a);

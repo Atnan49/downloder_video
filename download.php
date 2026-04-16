@@ -20,10 +20,16 @@ if ($action === 'serve') {
         $tempFile = $files[0];
         $ext = pathinfo($tempFile, PATHINFO_EXTENSION);
         $quality = isset($_GET['quality']) ? trim($_GET['quality']) : 'hq';
+        $title = isset($_GET['title']) ? trim($_GET['title']) : 'Video';
+        
+        // Membersihkan judul dari karakter aneh dan spasi berlebih
+        $safeTitle = preg_replace('/[^a-zA-Z0-9_\-\s]/', '', $title);
+        $safeTitle = trim(substr($safeTitle, 0, 40));
+        $safeTitle = preg_replace('/\s+/', '_', $safeTitle);
         
         $mime = ($ext === 'mp4') ? 'video/mp4' : 'audio/' . $ext;
         header('Content-Type: ' . $mime);
-        header('Content-Disposition: attachment; filename="t_downloader_' . $quality . '.' . $ext . '"');
+        header('Content-Disposition: attachment; filename="Tarifter.com_' . $safeTitle . '_' . $quality . '.' . $ext . '"');
         header('Content-Length: ' . filesize($tempFile));
         header('Cache-Control: no-cache, no-store, must-revalidate');
         
