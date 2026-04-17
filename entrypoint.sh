@@ -4,12 +4,12 @@ set -e
 # Railway automatically provides RAILWAY_STATIC_URL or custom domain env vars.
 # If available, we set Cobalt's API_URL so it constructs valid links.
 if [ ! -z "$RAILWAY_STATIC_URL" ]; then
-    export API_URL="https://${RAILWAY_STATIC_URL}/cobalt-api"
+    export API_URL="https://${RAILWAY_STATIC_URL}/cobalt-api/"
 elif [ ! -z "$RAILWAY_PUBLIC_DOMAIN" ]; then
-    export API_URL="https://${RAILWAY_PUBLIC_DOMAIN}/cobalt-api"
+    export API_URL="https://${RAILWAY_PUBLIC_DOMAIN}/cobalt-api/"
 else
     # Fallback to localhost if running locally
-    export API_URL="http://localhost/cobalt-api"
+    export API_URL="http://localhost/cobalt-api/"
 fi
 
 # Ensure Cobalt listens on all interfaces inside the container
