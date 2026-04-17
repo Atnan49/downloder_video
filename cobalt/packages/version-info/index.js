@@ -27,8 +27,6 @@ const readGit = (filename) => {
 }
 
 export const getCommit = async () => {
-    if (process.env.RAILWAY_GIT_COMMIT_SHA) return process.env.RAILWAY_GIT_COMMIT_SHA;
-    if (!root) return 'unknown';
     return (await readGit('.git/logs/HEAD'))
             ?.split('\n')
             ?.filter(String)
@@ -37,10 +35,6 @@ export const getCommit = async () => {
 }
 
 export const getBranch = async () => {
-    if (process.env.RAILWAY_GIT_BRANCH) {
-        return process.env.RAILWAY_GIT_BRANCH;
-    }
-
     if (process.env.CF_PAGES_BRANCH) {
         return process.env.CF_PAGES_BRANCH;
     }
@@ -49,17 +43,12 @@ export const getBranch = async () => {
         return process.env.WORKERS_CI_BRANCH;
     }
 
-    if (!root) return 'main';
-
     return (await readGit('.git/HEAD'))
             ?.replace(/^ref: refs\/heads\//, '')
             ?.trim();
 }
 
 export const getRemote = async () => {
-    if (process.env.RAILWAY_GIT_REPO_NAME) return process.env.RAILWAY_GIT_REPO_NAME;
-    if (!root) return 'Atnan49/downloder_video';
-
     let remote = (await readGit('.git/config'))
                     ?.split('\n')
                     ?.find(line => line.includes('url = '))
