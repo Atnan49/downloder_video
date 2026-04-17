@@ -15,6 +15,11 @@ fi
 # Ensure default site is enabled
 a2ensite 000-default.conf > /dev/null 2>&1
 
+# Use Railway's injected PORT environment variable if available
+if [ -n "$PORT" ]; then
+    sed -i "s/80/$PORT/g" /etc/apache2/sites-available/000-default.conf /etc/apache2/ports.conf
+fi
+
 # Initialize rl tracking for api.php rate limiter
 touch /tmp/rl.json
 chmod 777 /tmp/rl.json
