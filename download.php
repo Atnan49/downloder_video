@@ -6,7 +6,6 @@ error_reporting(0);
 $action = isset($_GET['action']) ? trim($_GET['action']) : 'prepare';
 
 // --- COBALT API PROXY BLOCK ---
-// If the action is cobalt, we proxy to the local cobalt instance
 if ($action === 'cobalt') {
     $url = isset($_GET['url']) ? trim($_GET['url']) : '';
     $quality = isset($_GET['quality']) ? trim($_GET['quality']) : '1080';
@@ -61,8 +60,8 @@ if ($action === 'cobalt') {
         die("Unexpected response from Cobalt: " . htmlspecialchars($response));
     }
 }
-// --- END COBALT API PROXY BLOCK ---
 
+// --- SERVE ACTION ---
 if ($action === 'serve') {
     $fileId = isset($_GET['fileId']) ? trim($_GET['fileId']) : '';
     
@@ -111,106 +110,109 @@ if ($action === 'serve') {
     }
 }
 
-// Prepare action (Using yt-dlp fallback)
-$url = isset($_GET['url']) ? trim($_GET['url']) : '';
-$quality = isset($_GET['quality']) ? trim($_GET['quality']) : 'hq';
+// --- PREPARE ACTION (Using yt-dlp fallback) ---
+if ($action === 'prepare') {
+    $url = isset($_GET['url']) ? trim($_GET['url']) : '';
+    $quality = isset($_GET['quality']) ? trim($_GET['quality']) : 'hq';
 
-if (empty($url)) {
-    header('Content-Type: application/json');
-    echo json_encode(['success' => false, 'error' => 'URL is missing']);
-    exit;
-}
+    if (empty($url)) {
+        header('Content-Type: application/json');
+        echo json_encode(['success' => false, 'error' => 'URL is missing']);
+        exit;
+    }
 
-$urlIsHttp = preg_match('#^https?://#i', $url);
-if (!$urlIsHttp && strpos($url, 'ytsearch') !== 0) {
-    header('Content-Type: application/json');
-    echo json_encode(['success' => false, 'error' => 'Invalid URL protocol. Only HTTP and HTTPS are allowed.']);
-    exit;
-}
+    $urlIsHttp = preg_match('#^https?://#i', $url);
+    if (!$urlIsHttp && strpos($url, 'ytsearch') !== 0) {
+        header('Content-Type: application/json');
+        echo json_encode(['success' => false, 'error' => 'Invalid URL protocol. Only HTTP and HTTPS are allowed.']);
+        exit;
+    }
 
-$tempDir = __DIR__ . DIRECTORY_SEPARATOR . 'temp_videos';
-if (!file_exists($tempDir)) {
-    mkdir($tempDir, 0777, true);
-}
+    $tempDir = __DIR__ . DIRECTORY_SEPARATOR . 'temp_videos';
+    if (!file_exists($tempDir)) {
+        mkdir($tempDir, 0777, true);
+    }
 
-if (rand(1, 10) === 1) {
-    foreach (glob($tempDir . DIRECTORY_SEPARATOR . "vid_*.*") as $file) {
-        if (file_exists($file) && filemtime($file) < time() - 3600) {
-            @unlink($file);
+    if (rand(1, 10) === 1) {
+        foreach (glob($tempDir . DIRECTORY_SEPARATOR . "vid_*.*") as $file) {
+            if (file_exists($file) && filemtime($file) < time() - 3600) {
+                @unlink($file);
+            }
         }
     }
-}
 
-if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-    $ytDlpPath = __DIR__ . DIRECTORY_SEPARATOR . 'yt-dlp.exe'; 
-} else {
-    $ytDlpPath = '/usr/local/bin/yt-dlp'; 
-    if (!file_exists($ytDlpPath)) {
-        $ytDlpPath = __DIR__ . DIRECTORY_SEPARATOR . 'yt-dlp';
+    if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+        $ytDlpPath = __DIR__ . DIRECTORY_SEPARATOR . 'yt-dlp.exe'; 
+    } else {
+        $ytDlpPath = '/usr/local/bin/yt-dlp'; 
+        if (!file_exists($ytDlpPath)) {
+            $ytDlpPath = __DIR__ . DIRECTORY_SEPARATOR . 'yt-dlp';
+        }
     }
-}
 
-$fileId = uniqid('vid_');
-if (strpos($quality, 'audio') === 0) {
-    if ($quality === 'audio-flac') $ext = 'flac';
-    elseif ($quality === 'audio-m4a') $ext = 'm4a';
-    else $ext = 'mp3';
-} else {
-    $ext = 'mp4';
-}
+    $fileId = uniqid('vid_');
+    if (strpos($quality, 'audio') === 0) {
+        if ($quality === 'audio-flac') $ext = 'flac';
+        elseif ($quality === 'audio-m4a') $ext = 'm4a';
+        else $ext = 'mp3';
+    } else {
+        $ext = 'mp4';
+    }
 
-$tempFile = $tempDir . DIRECTORY_SEPARATOR . $fileId . '.' . $ext;
+    $tempFile = $tempDir . DIRECTORY_SEPARATOR . $fileId . '.' . $ext;
 
-if ($quality === 'uhq') {
-    $formatStr = 'bestvideo[height<=2160][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=2160]+bestaudio/best';
-} elseif (strpos($quality, 'audio') === 0) {
-    $formatStr = 'bestaudio/best';
-} elseif ($quality === 'normal') {
-    $formatStr = 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best';
-} else {
-    $formatStr = 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best';
-}
+    if ($quality === 'uhq') {
+        $formatStr = 'bestvideo[height<=2160][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=2160]+bestaudio/best';
+    } elseif (strpos($quality, 'audio') === 0) {
+        $formatStr = 'bestaudio/best';
+    } elseif ($quality === 'normal') {
+        $formatStr = 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best';
+    } else {
+        $formatStr = 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best';
+    }
 
-if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-    $ffmpegDir = __DIR__ . DIRECTORY_SEPARATOR . 'ffmpeg-master-latest-win64-gpl-shared' . DIRECTORY_SEPARATOR . 'ffmpeg-master-latest-win64-gpl-shared' . DIRECTORY_SEPARATOR . 'bin';
-    $ffmpegFlag = '--ffmpeg-location ' . escapeshellarg($ffmpegDir);
-} else {
-    $ffmpegFlag = '';
-}
+    if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+        $ffmpegDir = __DIR__ . DIRECTORY_SEPARATOR . 'ffmpeg-master-latest-win64-gpl-shared' . DIRECTORY_SEPARATOR . 'ffmpeg-master-latest-win64-gpl-shared' . DIRECTORY_SEPARATOR . 'bin';
+        $ffmpegFlag = '--ffmpeg-location ' . escapeshellarg($ffmpegDir);
+    } else {
+        $ffmpegFlag = '';
+    }
 
-if (strpos($quality, 'audio') === 0) {
-    $extraFlags = '--extract-audio --audio-format ' . $ext;
-} else {
-    $extraFlags = '--merge-output-format mp4';
-}
+    if (strpos($quality, 'audio') === 0) {
+        $extraFlags = '--extract-audio --audio-format ' . $ext;
+    } else {
+        $extraFlags = '--merge-output-format mp4';
+    }
 
-$clientBypass = '--extractor-args "youtube:player_client=ios,android,web" --no-warnings';
-$cookiesFile = __DIR__ . DIRECTORY_SEPARATOR . 'cookies.txt';
+    $clientBypass = '--extractor-args "youtube:player_client=ios,android,web" --no-warnings';
+    $cookiesFile = __DIR__ . DIRECTORY_SEPARATOR . 'cookies.txt';
 
-if (file_exists($cookiesFile)) {
-    $clientBypass .= ' --cookies ' . escapeshellarg($cookiesFile);
-} else if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-    $clientBypass .= ' --cookies-from-browser chrome';
-}
+    if (file_exists($cookiesFile)) {
+        $clientBypass .= ' --cookies ' . escapeshellarg($cookiesFile);
+    } else if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+        $clientBypass .= ' --cookies-from-browser chrome';
+    }
 
-$cmd = escapeshellarg($ytDlpPath) . ' ' . $clientBypass . ' -f "' . $formatStr . '" ' . $ffmpegFlag . ' ' . $extraFlags . ' -o ' . escapeshellarg($tempFile) . ' ' . escapeshellarg($url) . ' 2>&1';
-$output = shell_exec($cmd);
+    $cmd = escapeshellarg($ytDlpPath) . ' ' . $clientBypass . ' -f "' . $formatStr . '" ' . $ffmpegFlag . ' ' . $extraFlags . ' -o ' . escapeshellarg($tempFile) . ' ' . escapeshellarg($url) . ' 2>&1';
+    $output = shell_exec($cmd);
 
-header('Content-Type: application/json');
+    header('Content-Type: application/json');
 
-if (file_exists($tempFile) && filesize($tempFile) > 0) {
-    echo json_encode([
-        'success' => true, 
-        'fileId' => $fileId,
-        'quality' => $quality,
-        'ext' => $ext,
-        'fileSize' => filesize($tempFile)
-    ]);
-} else {
-    echo json_encode([
-        'success' => false, 
-        'error' => 'Gagal mengunduh dan memproses video. Pastikan server memiliki FFmpeg terinstall.',
-        'logs' => $output
-    ]);
+    if (file_exists($tempFile) && filesize($tempFile) > 0) {
+        echo json_encode([
+            'success' => true, 
+            'fileId' => $fileId,
+            'quality' => $quality,
+            'ext' => $ext,
+            'fileSize' => filesize($tempFile)
+        ]);
+    } else {
+        echo json_encode([
+            'success' => false, 
+            'error' => 'Gagal mengunduh dan memproses video. Pastikan server memiliki FFmpeg terinstall.',
+            'logs' => $output
+        ]);
+    }
+    exit;
 }
 ?>
