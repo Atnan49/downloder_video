@@ -41,6 +41,7 @@ if ($action === 'cobalt') {
     ]);
     curl_setopt($ch, CURLOPT_TIMEOUT, 30);
 
+    $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 
     $json = json_decode($response, true);
