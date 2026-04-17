@@ -3,7 +3,7 @@ FROM php:8.2-apache
 # Install dependencies needed by Cobalt API, yt-dlp fallback (optional), and Supervisor
 RUN apt-get update && apt-get install -y --no-install-recommends \
     wget curl git ffmpeg supervisor python3 make g++ \
-    && curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && npm install -g pnpm \
     && rm -rf /var/lib/apt/lists/*
