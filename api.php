@@ -70,6 +70,7 @@ try {
     curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
     curl_setopt($ch, CURLOPT_TIMEOUT, 15);
 
+    $cobaltResponse = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 
     if ($cobaltResponse && $httpCode === 200) {
