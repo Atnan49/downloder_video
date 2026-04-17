@@ -82,8 +82,43 @@ if ($action === 'cobalt') {
 
     $json = json_decode($response, true);
 
-    if ($json && isset($json['status']) && in_array($json['status'], ['tunnel', 'redirect']) && isset($json['url'])) {
-        header('Location: ' . $json['url']);
+    if ($json && isset($json['url'])) {
+        $downloadUrl = $json['url'];
+        
+        // Final sanity check: If it's a relative URL, prepend the domain
+        if (strpos($downloadUrl, 'http') !== 0) {
+            $downloadUrl = 'https://tarifter.com' . (strpos($downloadUrl, '/') === 0 ? '' : '/') . $downloadUrl;
+        }
+
+        // --- OPTION: Stream the file directly to avoid routing/proxy issues ---
+        $fileName = 'Tarifter.com_Video.mp4';
+        if (isset($json['filename'])) {
+            $fileName = $json['filename'];
+        }
+
+        // Forward headers to the browser
+        header('Content-Description: File Transfer');
+        header('Content-Type: application/octet-stream');
+        header('Content-Disposition: attachment; filename="' . $fileName . '"');
+        header('Content-Transfer-Encoding: binary');
+        header('Expires: 0');
+        header('Cache-Control: must-revalidate');
+        header('Pragma: public');
+
+        // Use readfile or similar to stream the content
+        // We use CURL again to fetch the stream to ensure internal port access works
+        $sch = curl_init($downloadUrl);
+        curl_setopt($sch, CURLOPT_RETURNTRANSFER, false); // Stream directly to output
+        curl_setopt($sch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($sch, CURLOPT_HTTPHEADER, [
+            'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        ]);
+        
+        // Clean output buffers
+        while (ob_get_level() > 0) ob_end_clean();
+        
+        curl_exec($sch);
+        curl_close($sch);
         exit;
     } elseif ($json && isset($json['status']) && $json['status'] === 'picker') {
          // If it's a picker even in download action, redirect back to home with the URL
