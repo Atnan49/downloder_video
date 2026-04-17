@@ -32,11 +32,13 @@ if ($action === 'cobalt') {
     elseif ($quality === 'normal') $vQuality = '720';
     elseif (is_numeric($quality)) $vQuality = $quality;
 
+    $isYouTube = (strpos($url, 'youtube.com') !== false || strpos($url, 'youtu.be') !== false);
+    
     $payload = [
         'url' => $url,
         'videoQuality' => $vQuality,
         'filenameStyle' => 'pretty',
-        'alwaysProxy' => true
+        'alwaysProxy' => $isYouTube ? false : true // Disable proxy for YouTube to bypass bot detection
     ];
 
     if ($isAudio) {
@@ -44,10 +46,10 @@ if ($action === 'cobalt') {
         $payload['audioFormat'] = 'mp3';
     }
 
+    // --- INITIAL COBALT API CALL ---
     $response = false;
-    $lastError = '';
-    $finalUrl = '';
-
+    $httpCode = 0;
+    
     foreach ($targets as $target) {
         $ch = curl_init($target);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -58,44 +60,34 @@ if ($action === 'cobalt') {
             'Content-Type: application/json',
             'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         ]);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 60);
-        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $lastError = curl_error($ch);
-        $finalUrl = $target;
-
-        if ($response !== false && $httpCode === 200) {
-            break;
-        }
         curl_close($ch);
-    }
 
-    // Logging to /tmp for guaranteed Railway write access
-    $logMsg = date('[Y-m-d H:i:s]') . " [Download] Tried: " . implode(', ', $targets) . " | Success Target: $finalUrl | Response: $response | Error: $lastError\n";
-    @file_put_contents('/tmp/cobalt_debug.txt', $logMsg, FILE_APPEND);
-
-    if ($response === false) {
-        die("Connectivity Error: Could not reach Cobalt API after trying multiple targets. Last Error: $lastError");
+        if ($response !== false && $httpCode === 200) break;
     }
 
     $json = json_decode($response, true);
 
-    // --- FALLBACK LOGIC: If 4K/2K fails with login error, try 1080p ---
-    if ($json && isset($json['error']) && $json['error']['code'] === 'error.api.youtube.login' && intval($vQuality) > 1080) {
-        $payload['videoQuality'] = '1080';
+    // --- FALLBACK LOGIC: If login error pops up, try the "Minimalist/Metadata" payload ---
+    if ($json && isset($json['error']) && $json['error']['code'] === 'error.api.youtube.login') {
+        $minimalPayload = ['url' => $url];
         foreach ($targets as $target) {
             $ch = curl_init($target);
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($minimalPayload));
             curl_setopt($ch, CURLOPT_HTTPHEADER, ['Accept: application/json', 'Content-Type: application/json']);
             $response = curl_exec($ch);
             curl_close($ch);
             $json = json_decode($response, true);
             if ($json && !isset($json['error'])) break;
         }
+    }
+
+    if ($response === false || empty($response)) {
+        die("Connectivity Error: Could not reach Cobalt API endpoints.");
     }
 
     if ($json && isset($json['url'])) {

@@ -16,6 +16,7 @@ fi
 export API_LISTEN_ADDRESS="0.0.0.0"
 export API_PORT="9001"
 export COOKIE_PATH="/var/www/html/cookies.json"
+export API_ALWAYS_PROXY="false"
 
 # Proactively update yt-dlp to handle newest YouTube changes
 python3 -m pip install -U yt-dlp 2>/dev/null || true
