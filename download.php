@@ -6,6 +6,57 @@ error_reporting(0);
 $action = isset($_GET['action']) ? trim($_GET['action']) : 'prepare';
 
 // Kirim file yang udah siap ke user
+
+if ($action === 'cobalt') {
+    $url = isset($_GET['url']) ? trim($_GET['url']) : '';
+    $quality = isset($_GET['quality']) ? trim($_GET['quality']) : '720';
+
+    if (empty($url)) {
+        die("URL is empty.");
+    }
+
+    $payload = [
+        'url' => $url,
+    ];
+
+    if ($quality === 'audio') {
+        $payload['isAudioOnly'] = true;
+        // Opsional: audioFormat = "mp3" atau "best", dll. Cobalt akan nentuin sesuai source.
+    } else {
+        $payload['videoQuality'] = $quality; 
+    }
+
+    // Mengirim POST request ke Local Cobalt Server (dari Supervisord tadi)
+    $ch = curl_init('http://127.0.0.1:9000/');
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Accept: application/json',
+        'Content-Type: application/json'
+    ]);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30); // Timeout 30 detik untuk generate
+
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($response === false || $httpCode !== 200) {
+        die("Error connecting to Cobalt API. Please ensure the backend is running. HTTP Code: " . $httpCode);
+    }
+
+    $json = json_decode($response, true);
+    if (isset($json['status']) && ($json['status'] === 'stream' || $json['status'] === 'redirect') && isset($json['url'])) {
+        // Arahkan browser user ke link download milik Cobalt
+        header('Location: ' . $json['url']);
+        exit;
+    } else if (isset($json['error'])) {
+        die("Cobalt Error: " . $json['error']['code']);
+    } else {
+        die("Unknown response from Cobalt: " . htmlspecialchars($response));
+    }
+}
+
 if ($action === 'serve') {
     $fileId = isset($_GET['fileId']) ? trim($_GET['fileId']) : '';
     

@@ -1,18 +1,37 @@
 FROM php:8.2-apache
 
+# Install dependencies needed by Cobalt API, yt-dlp fallback (optional), and Supervisor
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    wget \
-    ffmpeg \
-    && rm -rf /var/lib/apt/lists/* \
-    && wget -qO /usr/local/bin/yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux \
-    && chmod a+rx /usr/local/bin/yt-dlp \
-    && a2enmod rewrite \
+    wget curl git ffmpeg supervisor \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && npm install -g pnpm \
+    && rm -rf /var/lib/apt/lists/*
+
+# Fix mpm_event issue on Railway and enable proxy for Cobalt API
+RUN a2dismod mpm_event || true ; a2dismod mpm_worker || true \
+    && a2enmod mpm_prefork rewrite proxy proxy_http \
     && mkdir -p /var/www/html/temp_videos \
     && chmod 777 /var/www/html/temp_videos
 
+# Copy app files
 COPY . /var/www/html/
+
+# Copy custom Apache virtual host configuring ProxyPass to Cobalt
+COPY 000-default.conf /etc/apache2/sites-available/000-default.conf
+
+# Setup Cobalt dependencies
+WORKDIR /var/www/html/cobalt
+RUN pnpm install
+
+# Return to web root
+WORKDIR /var/www/html
 
 EXPOSE 80
 
-# Fix kasus mpm_event nyala sendiri di Railway and run yt-dlp self-update
-CMD ["/bin/bash", "-c", "yt-dlp -U; a2dismod mpm_event mpm_worker || true; a2enmod mpm_prefork; apache2-foreground"]
+# Configure Supervisor and Entrypoint
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+CMD ["/entrypoint.sh"]

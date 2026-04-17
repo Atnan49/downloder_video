@@ -48,165 +48,68 @@ try {
         respondWithError('Invalid URL format');
     }
 
-    $cacheFile = '/tmp/' . md5($url) . '.json';
-    if (!is_dir('/tmp')) {
-        @mkdir('/tmp', 0777, true);
-    }
-    if (file_exists($cacheFile) && (time() - filemtime($cacheFile) < 1800)) {
-        echo file_get_contents($cacheFile);
-        exit;
-    }
+    $title = "Video Media";
+    $thumbnail = "";
 
-    // Spotify ga bisa langsung, jadi scrape judul terus cari di YouTube
-    if (strpos($url, 'spotify.com') !== false) {
-        $context = stream_context_create([
-            'http' => [
-                'user_agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36',
-                'ignore_errors' => true 
-            ]
-        ]);
-        $html = @file_get_contents($url, false, $context);
-        if ($html) {
-            $searchQuery = '';
-            if (preg_match('/<meta property="og:title" content="(.*?)"/i', $html, $matches)) {
-                $searchQuery = html_entity_decode($matches[1], ENT_QUOTES);
-                if (preg_match('/<meta property="og:description" content="(.*?)"/i', $html, $descMatches)) {
-                    $searchQuery .= ' ' . html_entity_decode($descMatches[1], ENT_QUOTES);
-                }
-            } else if (preg_match('/<title>(.*?)<\/title>/i', $html, $matches)) {
-                $searchQuery = html_entity_decode(str_replace(' | Spotify', '', $matches[1]), ENT_QUOTES);
-            }
-
-            if (!empty($searchQuery)) {
-                $url = 'ytsearch1:' . $searchQuery;
-            }
+    // Ambil metadata sederhana tanpa yt-dlp (anti-banned)
+    if (strpos($url, 'youtube.com') !== false || strpos($url, 'youtu.be') !== false) {
+        $oembed = @json_decode(@file_get_contents("https://www.youtube.com/oembed?url=" . urlencode($url) . "&format=json"), true);
+        if ($oembed) {
+            $title = $oembed['title'] ?? $title;
+            // Ganti format thumbnail oembed maxresdefault jika tersedia
+            $thumbnail = $oembed['thumbnail_url'] ?? $thumbnail;
+            $thumbnail = str_replace('hqdefault', 'maxresdefault', $thumbnail);
         }
-    }
-
-    // Deteksi path yt-dlp sesuai OS
-    if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-        $ytDlpPath = __DIR__ . DIRECTORY_SEPARATOR . 'yt-dlp.exe';
-    } else {
-        $ytDlpPath = '/usr/local/bin/yt-dlp';
-        if (!file_exists($ytDlpPath)) {
-            $ytDlpPath = __DIR__ . DIRECTORY_SEPARATOR . 'yt-dlp';
+    } else if (strpos($url, 'tiktok.com') !== false) {
+        $oembed = @json_decode(@file_get_contents("https://www.tiktok.com/oembed?url=" . urlencode($url)), true);
+        if ($oembed) {
+            $title = $oembed['title'] ?? $title;
+            $thumbnail = $oembed['thumbnail_url'] ?? $thumbnail;
         }
-    }
-
-    $cmd = escapeshellcmd($ytDlpPath) . ' -J --no-playlist --no-warnings --extractor-args "youtube:player_client=ios,android,web" ';
-
-    $cookiesFile = __DIR__ . DIRECTORY_SEPARATOR . 'cookies.txt';
-
-    // Auto-generate cookies.txt dari Environment Variable (Untuk Railway)
-    $envCookies = getenv('YOUTUBE_COOKIES');
-    if ($envCookies) {
-        file_put_contents($cookiesFile, base64_decode($envCookies));
-    }
-
-    if (file_exists($cookiesFile)) {
-        $cmd .= '--cookies ' . escapeshellarg($cookiesFile) . ' ';
-    } else if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-        // Fallback mengambil cookie dari Chrome jika di lokal (XAMPP)
-        $cmd .= '--cookies-from-browser chrome ';
-    }
-    
-    $cmd .= escapeshellarg($url) . ' 2>&1';
-
-    $output = shell_exec($cmd);
-
-    if ($output === null || trim($output) === '') {
-        respondWithError('Gagal menjalankan yt-dlp. Output kosong, cek izin atau antivirus.');
-    }
-
-    $videoData = json_decode($output, true);
-
-    if ($videoData === null) {
-        $cleanError = substr($output, 0, 500);
-        respondWithError('yt-dlp error: ' . $cleanError);
-    }
-
-    // Kalau dari ytsearch (fallback Spotify), ambil entry pertama
-    if (isset($videoData['_type']) && $videoData['_type'] === 'playlist' && !empty($videoData['entries'])) {
-        $videoData = $videoData['entries'][0];
     }
 
     $response = [
         'success' => true,
-        'title' => $videoData['title'] ?? 'Unknown Title',
-        'thumbnail' => $videoData['thumbnail'] ?? '',
-        'duration_string' => isset($videoData['duration_string']) ? $videoData['duration_string'] : (isset($videoData['duration']) ? gmdate("i:s", $videoData['duration']) : 'Unknown'),
-        'extractor' => $videoData['extractor'] ?? 'Unknown',
+        'title' => $title,
+        'thumbnail' => $thumbnail,
+        'duration_string' => '-',
+        'extractor' => 'cobalt',
         'formats' => []
     ];
 
-    $formats = $videoData['formats'] ?? [];
-    $filteredFormats = [];
-
-    foreach ($formats as $f) {
-        if (isset($f['url']) && strpos($f['url'], 'http') === 0) {
-            
-            $height = isset($f['height']) ? $f['height'] : 0;
-            $vcodec = $f['vcodec'] ?? 'none';
-            $acodec = $f['acodec'] ?? 'none';
-            
-            // Audio only
-            if ($vcodec === 'none' && $acodec !== 'none') {
-                $filteredFormats[] = [
-                    'format_id' => $f['format_id'] ?? '',
-                    'ext' => $f['ext'] ?? 'mp3',
-                    'height' => 'Audio',
-                    'url' => $f['url'],
-                    'quality_label' => 'audio',
-                    'format_note' => $f['format_note'] ?? 'Audio Only',
-                    'abr' => $f['abr'] ?? 0
-                ];
-                continue; 
-            }
-
-            // Video + audio, atau video HD yang nanti di-merge
-            if (($vcodec !== 'none' && $acodec !== 'none') || ($vcodec !== 'none' && $height >= 1080)) {
-                $qualityLabel = 'normal';
-                if ($height >= 1080) {
-                    $qualityLabel = 'hq';
-                }
-                if ($height >= 2160) {
-                    $qualityLabel = 'uhq';
-                }
-
-                $filteredFormats[] = [
-                    'format_id' => $f['format_id'] ?? '',
-                    'ext' => $f['ext'] ?? 'mp4',
-                    'height' => $height,
-                    'url' => $f['url'],
-                    'quality_label' => $qualityLabel,
-                    'format_note' => $f['format_note'] ?? ($height . 'p')
-                ];
-            }
-        }
-    }
-
-    // Fallback ke direct URL kalau ga ada format yg cocok
-    if (empty($filteredFormats) && isset($videoData['url'])) {
-        $filteredFormats[] = [
-            'format_id' => 'direct',
-            'ext' => $videoData['ext'] ?? 'mp4',
-            'height' => 'Source',
-            'url' => $videoData['url'],
-            'quality_label' => 'normal',
-            'format_note' => 'Best Quality'
-        ];
-    }
-
-    $response['formats'] = array_values($filteredFormats);
-
-    if (isset($videoData['url'])) {
-        $response['best_url'] = $videoData['url'];
-    }
-
-    $finalJson = json_encode($response);
-    file_put_contents($cacheFile, $finalJson);
+    $formats = [];
     
-    echo $finalJson;
+    // Siapkan Opsi Download yang dialihkan melalui download.php ke API Cobalt
+    $formats[] = [
+        'format_id' => 'hq',
+        'ext' => 'mp4',
+        'height' => '1080',
+        'url' => 'download.php?action=cobalt&quality=1080&url=' . urlencode($url),
+        'quality_label' => 'hq',
+        'format_note' => 'High Quality (1080p+)'
+    ];
+
+    $formats[] = [
+        'format_id' => 'normal',
+        'ext' => 'mp4',
+        'height' => '720',
+        'url' => 'download.php?action=cobalt&quality=720&url=' . urlencode($url),
+        'quality_label' => 'normal',
+        'format_note' => 'Standard (720p)'
+    ];
+
+    $formats[] = [
+        'format_id' => 'audio',
+        'ext' => 'mp3',
+        'height' => 'Audio',
+        'url' => 'download.php?action=cobalt&quality=audio&url=' . urlencode($url),
+        'quality_label' => 'audio',
+        'format_note' => 'Audio (MP3)'
+    ];
+
+    $response['formats'] = $formats;
+
+    echo json_encode($response);
 } catch (Exception $e) {
     respondWithError('Server PHP Error: ' . $e->getMessage());
 }
