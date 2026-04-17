@@ -57,14 +57,16 @@ try {
     $payload = [
         'url' => $url,
         'videoQuality' => '1080',
-        'filenameStyle' => 'pretty'
+        'filenameStyle' => 'pretty',
+        'alwaysProxy' => true
     ];
 
     $ch = curl_init($cobaltUrl);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_HTTPHEADER, [
         'Accept: application/json',
-        'Content-Type: application/json'
+        'Content-Type: application/json',
+        'User-Agent: TarifterBot/1.0 (https://tarifter.com)'
     ]);
     curl_setopt($ch, CURLOPT_POST, true);
     curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));

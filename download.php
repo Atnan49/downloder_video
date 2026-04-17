@@ -27,8 +27,13 @@ if ($action === 'cobalt') {
         'url' => $url,
         'videoQuality' => $vQuality,
         'filenameStyle' => 'pretty',
-        'downloadMode' => $isAudio ? 'audio' : 'auto'
+        'alwaysProxy' => true
     ];
+
+    if ($isAudio) {
+        $payload['downloadMode'] = 'audio';
+        $payload['audioFormat'] = 'mp3';
+    }
 
     $ch = curl_init('http://127.0.0.1:9001/');
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -36,12 +41,14 @@ if ($action === 'cobalt') {
     curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
     curl_setopt($ch, CURLOPT_HTTPHEADER, [
         'Accept: application/json',
-        'Content-Type: application/json'
+        'Content-Type: application/json',
+        'User-Agent: TarifterBot/1.0 (https://tarifter.com)'
     ]);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 45);
 
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
 
     $json = json_decode($response, true);
 
