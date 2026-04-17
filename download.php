@@ -26,7 +26,7 @@ if ($action === 'cobalt') {
     }
 
     // Mengirim POST request ke Local Cobalt Server (dari Supervisord tadi)
-    $ch = curl_init('http://127.0.0.1:9000/');
+      $ch = curl_init('http://127.0.0.1:9001/');
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_HTTPHEADER, [
         'Accept: application/json',
