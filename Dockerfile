@@ -12,6 +12,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN rm -f /etc/apache2/mods-enabled/mpm_*.load \
     && rm -f /etc/apache2/mods-enabled/mpm_*.conf \
     && a2enmod mpm_prefork rewrite proxy proxy_http \
+    && echo "ServerName localhost" > /etc/apache2/conf-available/servername.conf \
+    && a2enconf servername \
     && mkdir -p /var/www/html/temp_videos \
     && chmod 777 /var/www/html/temp_videos
 
