@@ -49,17 +49,22 @@ try {
     }
 
     $title = "Video Media";
-    $thumbnail = "";
-    $picker = null;
+    // Environment awareness: Use internal proxy on server, public API on localhost
+    $host = $_SERVER['HTTP_HOST'] ?? '';
+    $isLocal = (strpos($host, 'localhost') !== false || strpos($host, '127.0.0.1') !== false || strpos($host, '192.168') !== false);
+    
+    // Internal path (Apache Proxy) is usually safer than raw port inside container
+    $cobaltUrl = $isLocal ? 'https://tarifter.com/cobalt-api/' : 'http://localhost/cobalt-api/';
 
-    // Use Cobalt API for metadata and options
-    $cobaltUrl = 'http://127.0.0.1:9001/';
     $payload = [
         'url' => $url,
         'videoQuality' => '1080',
         'filenameStyle' => 'pretty',
         'alwaysProxy' => true
     ];
+
+    $thumbnail = "";
+    $picker = null;
 
     $ch = curl_init($cobaltUrl);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -70,13 +75,20 @@ try {
     ]);
     curl_setopt($ch, CURLOPT_POST, true);
     curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
-    curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
 
     $cobaltResponse = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+
+    if ($cobaltResponse === false) {
+        // Fallback or detailed error
+        $cobaltData = ['status' => 'error', 'message' => 'Cobalt API connection failure: ' . $curlError];
+    } else {
+        $cobaltData = json_decode($cobaltResponse, true);
+    }
 
     if ($cobaltResponse && $httpCode === 200) {
-        $cobaltData = json_decode($cobaltResponse, true);
         if (isset($cobaltData['status'])) {
             if ($cobaltData['status'] === 'picker') {
                 $picker = $cobaltData['picker'];

@@ -16,7 +16,13 @@ if ($action === 'cobalt') {
 
     $isAudio = (strpos($quality, 'audio') !== false);
 
-    // Quality mapping for Cobalt
+    // Environment awareness: Use internal proxy on server, public API on localhost
+    $host = $_SERVER['HTTP_HOST'] ?? '';
+    $isLocal = (strpos($host, 'localhost') !== false || strpos($host, '127.0.0.1') !== false || strpos($host, '192.168') !== false);
+    
+    // Internal path (Apache Proxy) is usually safer than raw port inside container
+    $cobaltApiUrl = $isLocal ? 'https://tarifter.com/cobalt-api/' : 'http://localhost/cobalt-api/';
+
     $vQuality = '1080';
     if ($quality === 'uhq') $vQuality = '2160';
     elseif ($quality === 'hq') $vQuality = '1080';
@@ -35,7 +41,7 @@ if ($action === 'cobalt') {
         $payload['audioFormat'] = 'mp3';
     }
 
-    $ch = curl_init('http://127.0.0.1:9001/');
+    $ch = curl_init($cobaltApiUrl);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_POST, true);
     curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
@@ -44,25 +50,30 @@ if ($action === 'cobalt') {
         'Content-Type: application/json',
         'User-Agent: TarifterBot/1.0 (https://tarifter.com)'
     ]);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 45);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 60);
 
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $curlError = curl_error($ch);
 
+    if ($response === false) {
+        die("Connectivity Error: Could not reach Cobalt API. CURL Error: " . $curlError . " (Target: $cobaltApiUrl)");
+    }
+
     $json = json_decode($response, true);
 
-    if ($json && isset($json['status']) && in_array($json['status'], ['tunnel', 'redirect', 'picker']) && isset($json['url'])) {
+    if ($json && isset($json['status']) && in_array($json['status'], ['tunnel', 'redirect']) && isset($json['url'])) {
         header('Location: ' . $json['url']);
         exit;
+    } elseif ($json && isset($json['status']) && $json['status'] === 'picker') {
+         // If it's a picker even in download action, redirect back to home with the URL
+         header('Location: index.html?url=' . urlencode($url));
+         exit;
     } elseif ($json && isset($json['error'])) {
-        die("Cobalt Error: " . ($json['error']['code'] ?? 'Unknown error'));
-    } elseif ($json && isset($json['url'])) {
-        header('Location: ' . $json['url']);
-        exit;
+        die("Cobalt Error: " . ($json['error']['code'] ?? 'Unknown error') . " - " . ($json['error']['context']['service'] ?? ''));
     } else {
         header('HTTP/1.1 500 Internal Server Error');
-        die("Unexpected response from Cobalt: " . htmlspecialchars($response));
+        die("Unexpected response from Cobalt (HTTP $httpCode): " . htmlspecialchars($response));
     }
 }
 
