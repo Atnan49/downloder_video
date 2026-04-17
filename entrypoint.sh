@@ -12,6 +12,10 @@ else
     export API_URL="http://localhost/cobalt-api"
 fi
 
+# Ensure Cobalt listens on all interfaces inside the container
+export API_LISTEN_ADDRESS="0.0.0.0"
+export API_PORT="9001"
+
 # Force disable conflicting MPMs and ensure prefork is uniquely loaded
 rm -f /etc/apache2/mods-enabled/mpm_*.load /etc/apache2/mods-enabled/mpm_*.conf
 a2enmod mpm_prefork > /dev/null 2>&1 || true
