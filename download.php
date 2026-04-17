@@ -26,9 +26,8 @@ if ($action === 'cobalt') {
     $payload = [
         'url' => $url,
         'videoQuality' => $vQuality,
-        'downloadMode' => $isAudio ? 'audio' : 'video',
         'filenameStyle' => 'pretty',
-        'isAudioOnly' => $isAudio
+        'downloadMode' => $isAudio ? 'audio' : 'auto'
     ];
 
     $ch = curl_init('http://127.0.0.1:9001/');
