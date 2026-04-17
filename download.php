@@ -5,8 +5,8 @@ error_reporting(0);
 
 $action = isset($_GET['action']) ? trim($_GET['action']) : 'prepare';
 
-// Kirim file yang udah siap ke user
-
+// --- COBALT API PROXY BLOCK ---
+// If the action is cobalt, we proxy to the local cobalt instance
 if ($action === 'cobalt') {
     $url = isset($_GET['url']) ? trim($_GET['url']) : '';
     $quality = isset($_GET['quality']) ? trim($_GET['quality']) : '1080';
@@ -15,69 +15,53 @@ if ($action === 'cobalt') {
         die("URL is empty.");
     }
 
+    $isAudio = (strpos($quality, 'audio') !== false);
+    
+    // Quality mapping for Cobalt
+    $vQuality = '1080';
+    if ($quality === 'uhq') $vQuality = '2160';
+    elseif ($quality === 'hq') $vQuality = '1080';
+    elseif ($quality === 'normal') $vQuality = '720';
+    elseif (is_numeric($quality)) $vQuality = $quality;
+
     $payload = [
         'url' => $url,
-        'filenameStyle' => 'pretty'
+        'videoQuality' => $vQuality,
+        'downloadMode' => $isAudio ? 'audio' : 'video',
+        'filenameStyle' => 'pretty',
+        'isAudioOnly' => $isAudio
     ];
 
-    // Map quality labels to Cobalt numeric values
-    if ($quality === 'audio') {
-        $payload['downloadMode'] = 'audio';
-        $payload['audioFormat'] = 'mp3';
-    } else {
-        $qMap = [
-            'uhq' => '2160',
-            'hq' => '1080',
-            'normal' => '720',
-            '4320' => '4320',
-            '2160' => '2160',
-            '1080' => '1080',
-            '720' => '720',
-            '480' => '480',
-            '360' => '360'
-        ];
-        $payload['videoQuality'] = isset($qMap[$quality]) ? $qMap[$quality] : '1080';
-    }
-
-    // Mengirim POST request ke Local Cobalt Server
     $ch = curl_init('http://127.0.0.1:9001/');
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
     curl_setopt($ch, CURLOPT_HTTPHEADER, [
         'Accept: application/json',
         'Content-Type: application/json'
     ]);
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
-    curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
 
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
 
-    if ($response === false || $httpCode !== 200) {
-        $errorMsg = ($response) ? json_decode($response, true)['error']['code'] ?? 'Unknown' : 'Connection failed';
-        die("Error connecting to Cobalt API (HTTP $httpCode): $errorMsg");
-    }
-
     $json = json_decode($response, true);
-    
-    // Check for success statuses
-    if (isset($json['status']) && in_array($json['status'], ['tunnel', 'redirect', 'picker']) && isset($json['url'])) {
+
+    if ($json && isset($json['status']) && in_array($json['status'], ['tunnel', 'redirect', 'picker']) && isset($json['url'])) {
         header('Location: ' . $json['url']);
         exit;
-    } else if (isset($json['status']) && $json['status'] === 'picker') {
-        // This shouldn't happen for a direct download call, but just in case
-        die("This link requires you to pick an item first.");
-    } else if (isset($json['error'])) {
+    } elseif ($json && isset($json['error'])) {
         die("Cobalt Error: " . ($json['error']['code'] ?? 'Unknown error'));
-    } else if (isset($json['url'])) {
+    } elseif ($json && isset($json['url'])) {
         header('Location: ' . $json['url']);
         exit;
     } else {
+        header('HTTP/1.1 500 Internal Server Error');
         die("Unexpected response from Cobalt: " . htmlspecialchars($response));
     }
 }
-
+// --- END COBALT API PROXY BLOCK ---
 
 if ($action === 'serve') {
     $fileId = isset($_GET['fileId']) ? trim($_GET['fileId']) : '';
@@ -95,7 +79,6 @@ if ($action === 'serve') {
         $quality = isset($_GET['quality']) ? trim($_GET['quality']) : 'hq';
         $title = isset($_GET['title']) ? trim($_GET['title']) : 'Video';
         
-        // Membersihkan judul dari karakter aneh dan spasi berlebih
         $safeTitle = preg_replace('/[^a-zA-Z0-9_\-\s]/', '', $title);
         $safeTitle = trim(substr($safeTitle, 0, 40));
         $safeTitle = preg_replace('/\s+/', '_', $safeTitle);
@@ -110,8 +93,7 @@ if ($action === 'serve') {
             ob_end_clean();
         }
         
-        // Chunked file output untuk menghemat RAM (Memory) saat melayani file besar (misal 1GB)
-        $chunkSize = 8 * 1024 * 1024; // 8 MB per chunk
+        $chunkSize = 8 * 1024 * 1024;
         $handle = fopen($tempFile, 'rb');
         if ($handle === false) {
             die("Error opening file");
@@ -129,7 +111,7 @@ if ($action === 'serve') {
     }
 }
 
-// Proses video dan return file ID
+// Prepare action (Using yt-dlp fallback)
 $url = isset($_GET['url']) ? trim($_GET['url']) : '';
 $quality = isset($_GET['quality']) ? trim($_GET['quality']) : 'hq';
 
@@ -139,17 +121,10 @@ if (empty($url)) {
     exit;
 }
 
-// Validasi URL Strict (Hanya izinkan HTTP dan HTTPS) untuk mencegah shell/command injection
 $urlIsHttp = preg_match('#^https?://#i', $url);
 if (!$urlIsHttp && strpos($url, 'ytsearch') !== 0) {
     header('Content-Type: application/json');
     echo json_encode(['success' => false, 'error' => 'Invalid URL protocol. Only HTTP and HTTPS are allowed.']);
-    exit;
-}
-
-if (!filter_var($url, FILTER_VALIDATE_URL) && strpos($url, 'ytsearch') !== 0) {
-    header('Content-Type: application/json');
-    echo json_encode(['success' => false, 'error' => 'Invalid URL format']);
     exit;
 }
 
@@ -158,10 +133,7 @@ if (!file_exists($tempDir)) {
     mkdir($tempDir, 0777, true);
 }
 
-// Jalankan proses bersih-bersih secara acak (probabilitas 10%)
-// Biar disk dan CPU server gak ngos-ngosan saat trafik tinggi
 if (rand(1, 10) === 1) {
-    // HANYA hapus file yang berawalan "vid_" (Sangat Aman)
     foreach (glob($tempDir . DIRECTORY_SEPARATOR . "vid_*.*") as $file) {
         if (file_exists($file) && filemtime($file) < time() - 3600) {
             @unlink($file);
@@ -169,7 +141,6 @@ if (rand(1, 10) === 1) {
     }
 }
 
-// Path yt-dlp sesuai OS
 if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
     $ytDlpPath = __DIR__ . DIRECTORY_SEPARATOR . 'yt-dlp.exe'; 
 } else {
@@ -190,7 +161,6 @@ if (strpos($quality, 'audio') === 0) {
 
 $tempFile = $tempDir . DIRECTORY_SEPARATOR . $fileId . '.' . $ext;
 
-// Pilih format terbaik sesuai kualitas
 if ($quality === 'uhq') {
     $formatStr = 'bestvideo[height<=2160][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=2160]+bestaudio/best';
 } elseif (strpos($quality, 'audio') === 0) {
@@ -201,7 +171,6 @@ if ($quality === 'uhq') {
     $formatStr = 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best';
 }
 
-// Path FFmpeg sesuai OS
 if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
     $ffmpegDir = __DIR__ . DIRECTORY_SEPARATOR . 'ffmpeg-master-latest-win64-gpl-shared' . DIRECTORY_SEPARATOR . 'ffmpeg-master-latest-win64-gpl-shared' . DIRECTORY_SEPARATOR . 'bin';
     $ffmpegFlag = '--ffmpeg-location ' . escapeshellarg($ffmpegDir);
@@ -216,14 +185,7 @@ if (strpos($quality, 'audio') === 0) {
 }
 
 $clientBypass = '--extractor-args "youtube:player_client=ios,android,web" --no-warnings';
-
 $cookiesFile = __DIR__ . DIRECTORY_SEPARATOR . 'cookies.txt';
-
-// Auto-generate cookies.txt dari Environment Variable (Untuk Railway)
-$envCookies = getenv('YOUTUBE_COOKIES');
-if ($envCookies) {
-    file_put_contents($cookiesFile, base64_decode($envCookies));
-}
 
 if (file_exists($cookiesFile)) {
     $clientBypass .= ' --cookies ' . escapeshellarg($cookiesFile);
@@ -232,7 +194,6 @@ if (file_exists($cookiesFile)) {
 }
 
 $cmd = escapeshellarg($ytDlpPath) . ' ' . $clientBypass . ' -f "' . $formatStr . '" ' . $ffmpegFlag . ' ' . $extraFlags . ' -o ' . escapeshellarg($tempFile) . ' ' . escapeshellarg($url) . ' 2>&1';
-
 $output = shell_exec($cmd);
 
 header('Content-Type: application/json');

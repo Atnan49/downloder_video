@@ -205,7 +205,9 @@ document.addEventListener('DOMContentLoaded', () => {
     attachDownloadListeners();
 
     function startDownload(url, quality, ext = 'mp4') {
-        if (url.startsWith('download.php')) {
+        const isCobalt = url.includes('action=cobalt');
+
+        if (url.startsWith('download.php') && !isCobalt) {
             showStatus('⏳ Processing and merging video on server...', '#f39c12');
             
             const pModal = document.getElementById('processingModal');
@@ -284,11 +286,13 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // Direct Download for Cobalt or external links
         const a = document.createElement('a');
         a.href = url;
         const safeTitle = window.videoTitle ? window.videoTitle.replace(/[^a-zA-Z0-9_\-\s]/g, '').trim().substring(0, 40).replace(/\s+/g, '_') : 'Video';
         const filename = 'Tarifter.com_' + safeTitle + '_' + quality + '.' + ext;
-        a.setAttribute('download', filename);
+        
+        // Use a new tab for Cobalt links to ensure trigger works effectively
         a.target = '_blank';
         document.body.appendChild(a);
         a.click();
@@ -296,6 +300,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         showStatus('Download started!', '#38ef7d');
     }
+
 
     document.addEventListener('click', (e) => {
         if (e.target.closest('#closeProcessingModal')) {
