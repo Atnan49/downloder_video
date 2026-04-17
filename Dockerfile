@@ -22,7 +22,7 @@ COPY 000-default.conf /etc/apache2/sites-available/000-default.conf
 
 # Setup Cobalt dependencies
 WORKDIR /var/www/html/cobalt
-RUN pnpm install
+RUN pnpm install --no-frozen-lockfile
 
 # Return to web root
 WORKDIR /var/www/html
