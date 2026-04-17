@@ -52,9 +52,9 @@ try {
     // Environment awareness: Use internal proxy on server, public API on localhost
     $host = $_SERVER['HTTP_HOST'] ?? '';
     $isLocal = (strpos($host, 'localhost') !== false || strpos($host, '127.0.0.1') !== false || strpos($host, '192.168') !== false);
-    
-    // Internal path (Apache Proxy) is usually safer than raw port inside container
-    $cobaltUrl = $isLocal ? 'https://tarifter.com/cobalt-api/' : 'http://localhost/cobalt-api/';
+
+    // Direct internal port access is usually more reliable inside Docker
+    $cobaltUrl = $isLocal ? 'https://tarifter.com/cobalt-api/' : 'http://127.0.0.1:9001/';
 
     $payload = [
         'url' => $url,
@@ -80,6 +80,10 @@ try {
     $cobaltResponse = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $curlError = curl_error($ch);
+
+    // Logging to file for diagnostics
+    $logMsg = date('[Y-m-d H:i:s]') . " [Metadata] Target: $cobaltUrl | Payload: " . json_encode($payload) . " | Response: $cobaltResponse | HTTP: $httpCode | Error: $curlError\n";
+    file_put_contents('cobalt_debug.txt', $logMsg, FILE_APPEND);
 
     if ($cobaltResponse === false) {
         // Fallback or detailed error

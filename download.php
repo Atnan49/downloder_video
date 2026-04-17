@@ -20,8 +20,8 @@ if ($action === 'cobalt') {
     $host = $_SERVER['HTTP_HOST'] ?? '';
     $isLocal = (strpos($host, 'localhost') !== false || strpos($host, '127.0.0.1') !== false || strpos($host, '192.168') !== false);
     
-    // Internal path (Apache Proxy) is usually safer than raw port inside container
-    $cobaltApiUrl = $isLocal ? 'https://tarifter.com/cobalt-api/' : 'http://localhost/cobalt-api/';
+    // Direct internal port access is usually more reliable inside Docker
+    $cobaltApiUrl = $isLocal ? 'https://tarifter.com/cobalt-api/' : 'http://127.0.0.1:9001/';
 
     $vQuality = '1080';
     if ($quality === 'uhq') $vQuality = '2160';
@@ -56,8 +56,12 @@ if ($action === 'cobalt') {
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $curlError = curl_error($ch);
 
+    // Logging to file for diagnostics
+    $logMsg = date('[Y-m-d H:i:s]') . " [Download] Target: $cobaltApiUrl | Payload: " . json_encode($payload) . " | Response: $response | HTTP: $httpCode | Error: $curlError\n";
+    file_put_contents('cobalt_debug.txt', $logMsg, FILE_APPEND);
+
     if ($response === false) {
-        die("Connectivity Error: Could not reach Cobalt API. CURL Error: " . $curlError . " (Target: $cobaltApiUrl)");
+        die("Connectivity Error: Could not reach Cobalt API. CURL Error: $curlError");
     }
 
     $json = json_decode($response, true);
