@@ -142,7 +142,22 @@ if (strpos($quality, 'audio') === 0) {
     $extraFlags = '--merge-output-format mp4';
 }
 
-$clientBypass = '--extractor-args "youtube:player_client=web,default" --no-warnings';
+$clientBypass = '--extractor-args "youtube:player_client=ios,android,web" --no-warnings';
+
+$cookiesFile = __DIR__ . DIRECTORY_SEPARATOR . 'cookies.txt';
+
+// Auto-generate cookies.txt dari Environment Variable (Untuk Railway)
+$envCookies = getenv('YOUTUBE_COOKIES');
+if ($envCookies) {
+    file_put_contents($cookiesFile, base64_decode($envCookies));
+}
+
+if (file_exists($cookiesFile)) {
+    $clientBypass .= ' --cookies ' . escapeshellarg($cookiesFile);
+} else if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+    $clientBypass .= ' --cookies-from-browser chrome';
+}
+
 $cmd = escapeshellarg($ytDlpPath) . ' ' . $clientBypass . ' -f "' . $formatStr . '" ' . $ffmpegFlag . ' ' . $extraFlags . ' -o ' . escapeshellarg($tempFile) . ' ' . escapeshellarg($url) . ' 2>&1';
 
 $output = shell_exec($cmd);

@@ -93,11 +93,21 @@ try {
         }
     }
 
-    $cmd = escapeshellcmd($ytDlpPath) . ' -J --no-playlist --no-warnings --extractor-args "youtube:player_client=web,default" ';
+    $cmd = escapeshellcmd($ytDlpPath) . ' -J --no-playlist --no-warnings --extractor-args "youtube:player_client=ios,android,web" ';
 
     $cookiesFile = __DIR__ . DIRECTORY_SEPARATOR . 'cookies.txt';
+
+    // Auto-generate cookies.txt dari Environment Variable (Untuk Railway)
+    $envCookies = getenv('YOUTUBE_COOKIES');
+    if ($envCookies) {
+        file_put_contents($cookiesFile, base64_decode($envCookies));
+    }
+
     if (file_exists($cookiesFile)) {
         $cmd .= '--cookies ' . escapeshellarg($cookiesFile) . ' ';
+    } else if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+        // Fallback mengambil cookie dari Chrome jika di lokal (XAMPP)
+        $cmd .= '--cookies-from-browser chrome ';
     }
     
     $cmd .= escapeshellarg($url) . ' 2>&1';
