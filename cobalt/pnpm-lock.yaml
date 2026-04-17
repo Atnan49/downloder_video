@@ -44,8 +44,8 @@ importers:
         specifier: 2.3.0
         version: 2.3.0
       isolated-vm:
-        specifier: ^6.0.2
-        version: 6.1.2
+        specifier: ^7.0.0
+        version: 7.0.3
       mime:
         specifier: ^4.1.0
         version: 4.1.0
@@ -1487,9 +1487,9 @@ packages:
   isexe@2.0.0:
     resolution: {integrity: sha512-RHxMLp9lnKHGHRng9QFhRCMbYAcVpn69smSGcq3f36xjgVVWThj4qqLbTLlq7Ssj8B+fIQ1EuCEGI2lKsyQeIw==}
 
-  isolated-vm@6.1.2:
-    resolution: {integrity: sha512-GGfsHqtlZiiurZaxB/3kY7LLAXR3sgzDul0fom4cSyBjx6ZbjpTrFWiH3z/nUfLJGJ8PIq9LQmQFiAxu24+I7A==}
-    engines: {node: '>=22.0.0'}
+  isolated-vm@7.0.3:
+    resolution: {integrity: sha512-placeholder}
+    engines: {node: '>=18.0.0'}
 
   jiti@2.6.1:
     resolution: {integrity: sha512-ekilCSN1jwRvIbgeg/57YFh8qQDNbwDb9xT/qu2DAHbFFZUicIl4ygVaAvzveMhMVr3LnpSKTNnwt8PoOfmKhQ==}
@@ -3457,7 +3457,7 @@ snapshots:
 
   isexe@2.0.0: {}
 
-  isolated-vm@6.1.2:
+  isolated-vm@7.0.3:
     dependencies:
       node-gyp-build: 4.8.4
 
