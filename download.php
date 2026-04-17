@@ -147,10 +147,11 @@ if ($action === 'cobalt') {
          exit;
     } elseif ($json && isset($json['error'])) {
         header('Content-Type: text/plain');
-        die("Cobalt Error: " . ($json['error']['code'] ?? 'Unknown error') . " - " . ($json['error']['context']['service'] ?? ''));
+        die("Cobalt Error: " . ($json['error']['code'] ?? 'Unknown error') . "\nFull Response: " . $response);
     } else {
         header('HTTP/1.1 500 Internal Server Error');
-        die("Unexpected response from Cobalt (HTTP $httpCode): " . htmlspecialchars($response));
+        header('Content-Type: text/plain');
+        die("Unexpected response from Cobalt (HTTP $httpCode):\n" . $response);
     }
 }
 
