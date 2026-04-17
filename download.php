@@ -15,7 +15,7 @@ if ($action === 'cobalt') {
     }
 
     $isAudio = (strpos($quality, 'audio') !== false);
-    
+
     // Quality mapping for Cobalt
     $vQuality = '1080';
     if ($quality === 'uhq') $vQuality = '2160';
@@ -41,9 +41,7 @@ if ($action === 'cobalt') {
     ]);
     curl_setopt($ch, CURLOPT_TIMEOUT, 30);
 
-    $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
 
     $json = json_decode($response, true);
 
@@ -64,34 +62,34 @@ if ($action === 'cobalt') {
 // --- SERVE ACTION ---
 if ($action === 'serve') {
     $fileId = isset($_GET['fileId']) ? trim($_GET['fileId']) : '';
-    
+
     if (empty($fileId) || !preg_match('/^vid_[a-f0-9]+$/', $fileId)) {
         die("Invalid file ID");
     }
-    
+
     $tempDir = __DIR__ . DIRECTORY_SEPARATOR . 'temp_videos';
     $files = glob($tempDir . DIRECTORY_SEPARATOR . $fileId . '.*');
-    
+
     if (!empty($files) && filesize($files[0]) > 0) {
         $tempFile = $files[0];
         $ext = pathinfo($tempFile, PATHINFO_EXTENSION);
         $quality = isset($_GET['quality']) ? trim($_GET['quality']) : 'hq';
         $title = isset($_GET['title']) ? trim($_GET['title']) : 'Video';
-        
+
         $safeTitle = preg_replace('/[^a-zA-Z0-9_\-\s]/', '', $title);
         $safeTitle = trim(substr($safeTitle, 0, 40));
         $safeTitle = preg_replace('/\s+/', '_', $safeTitle);
-        
+
         $mime = ($ext === 'mp4') ? 'video/mp4' : 'audio/' . $ext;
         header('Content-Type: ' . $mime);
         header('Content-Disposition: attachment; filename="Tarifter.com_' . $safeTitle . '_' . $quality . '.' . $ext . '"');
         header('Content-Length: ' . filesize($tempFile));
         header('Cache-Control: no-cache, no-store, must-revalidate');
-        
+
         while (ob_get_level() > 0) {
             ob_end_clean();
         }
-        
+
         $chunkSize = 8 * 1024 * 1024;
         $handle = fopen($tempFile, 'rb');
         if ($handle === false) {
@@ -102,7 +100,7 @@ if ($action === 'serve') {
             flush();
         }
         fclose($handle);
-        
+
         @unlink($tempFile);
         exit;
     } else {
@@ -142,9 +140,9 @@ if ($action === 'prepare') {
     }
 
     if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-        $ytDlpPath = __DIR__ . DIRECTORY_SEPARATOR . 'yt-dlp.exe'; 
+        $ytDlpPath = __DIR__ . DIRECTORY_SEPARATOR . 'yt-dlp.exe';
     } else {
-        $ytDlpPath = '/usr/local/bin/yt-dlp'; 
+        $ytDlpPath = '/usr/local/bin/yt-dlp';
         if (!file_exists($ytDlpPath)) {
             $ytDlpPath = __DIR__ . DIRECTORY_SEPARATOR . 'yt-dlp';
         }
@@ -200,7 +198,7 @@ if ($action === 'prepare') {
 
     if (file_exists($tempFile) && filesize($tempFile) > 0) {
         echo json_encode([
-            'success' => true, 
+            'success' => true,
             'fileId' => $fileId,
             'quality' => $quality,
             'ext' => $ext,
@@ -208,11 +206,10 @@ if ($action === 'prepare') {
         ]);
     } else {
         echo json_encode([
-            'success' => false, 
+            'success' => false,
             'error' => 'Gagal mengunduh dan memproses video. Pastikan server memiliki FFmpeg terinstall.',
             'logs' => $output
         ]);
     }
     exit;
 }
-?>
