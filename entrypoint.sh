@@ -12,6 +12,10 @@ else
     export API_URL="http://localhost/cobalt-api"
 fi
 
+# Force disable conflicting MPMs and ensure prefork is uniquely loaded
+rm -f /etc/apache2/mods-enabled/mpm_*.load /etc/apache2/mods-enabled/mpm_*.conf
+a2enmod mpm_prefork > /dev/null 2>&1 || true
+
 # Ensure default site is enabled
 a2ensite 000-default.conf > /dev/null 2>&1
 
