@@ -105,20 +105,38 @@ if ($action === 'cobalt') {
         header('Cache-Control: must-revalidate');
         header('Pragma: public');
 
-        // Use readfile or similar to stream the content
-        // We use CURL again to fetch the stream to ensure internal port access works
+        // Use CURL again to fetch the stream to ensure internal port access works
         $sch = curl_init($downloadUrl);
-        curl_setopt($sch, CURLOPT_RETURNTRANSFER, false); // Stream directly to output
+        curl_setopt($sch, CURLOPT_RETURNTRANSFER, true); // Get content first to check size/errors
         curl_setopt($sch, CURLOPT_FOLLOWLOCATION, true);
         curl_setopt($sch, CURLOPT_HTTPHEADER, [
             'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         ]);
         
+        $streamResponse = curl_exec($sch);
+        $sInfo = curl_getinfo($sch);
+        curl_close($sch);
+
+        if ($streamResponse === false || strlen($streamResponse) < 1000) {
+            header('Content-Type: text/plain');
+            header('Content-Disposition: inline');
+            die("Cobalt Tunnel Error: Response too small or failed. Size: " . strlen($streamResponse) . " bytes. Content: " . htmlspecialchars(substr($streamResponse, 0, 500)));
+        }
+
+        // Forward headers to the browser
+        header('Content-Description: File Transfer');
+        header('Content-Type: application/octet-stream');
+        header('Content-Disposition: attachment; filename="' . $fileName . '"');
+        header('Content-Transfer-Encoding: binary');
+        header('Content-Length: ' . strlen($streamResponse));
+        header('Expires: 0');
+        header('Cache-Control: must-revalidate');
+        header('Pragma: public');
+        
         // Clean output buffers
         while (ob_get_level() > 0) ob_end_clean();
         
-        curl_exec($sch);
-        curl_close($sch);
+        echo $streamResponse;
         exit;
     } elseif ($json && isset($json['status']) && $json['status'] === 'picker') {
          // If it's a picker even in download action, redirect back to home with the URL
