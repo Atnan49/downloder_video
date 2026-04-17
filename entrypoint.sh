@@ -22,7 +22,23 @@ a2ensite 000-default.conf > /dev/null 2>&1
 # Use Railway's injected PORT environment variable if available
 if [ -n "$PORT" ]; then
     echo "Running on dynamic port: $PORT"
-    sed -i "s/80/$PORT/g" /etc/apache2/sites-available/000-default.conf /etc/apache2/ports.conf
+
+    # Configure Apache to listen explicitly on both IPv4 and IPv6.
+    cat > /etc/apache2/ports.conf <<EOF
+Listen 0.0.0.0:$PORT
+Listen [::]:$PORT
+
+<IfModule ssl_module>
+        Listen 443
+</IfModule>
+
+<IfModule mod_gnutls.c>
+        Listen 443
+</IfModule>
+EOF
+
+    # Keep VirtualHost port aligned with injected runtime port.
+    sed -E -i "s#<VirtualHost \*:[0-9]+>#<VirtualHost *:$PORT>#" /etc/apache2/sites-available/000-default.conf
 fi
 
 # Initialize rl tracking for api.php rate limiter
