@@ -50,21 +50,59 @@ try {
 
     $title = "Video Media";
     $thumbnail = "";
+    $picker = null;
 
-    // Ambil metadata sederhana tanpa yt-dlp (anti-banned)
-    if (strpos($url, 'youtube.com') !== false || strpos($url, 'youtu.be') !== false) {
-        $oembed = @json_decode(@file_get_contents("https://www.youtube.com/oembed?url=" . urlencode($url) . "&format=json"), true);
-        if ($oembed) {
-            $title = $oembed['title'] ?? $title;
-            // Ganti format thumbnail oembed maxresdefault jika tersedia
-            $thumbnail = $oembed['thumbnail_url'] ?? $thumbnail;
-            $thumbnail = str_replace('hqdefault', 'maxresdefault', $thumbnail);
+    // Use Cobalt API for metadata and options
+    $cobaltUrl = 'http://127.0.0.1:9001/';
+    $payload = [
+        'url' => $url,
+        'videoQuality' => '1080',
+        'filenameStyle' => 'pretty'
+    ];
+
+    $ch = curl_init($cobaltUrl);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Accept: application/json',
+        'Content-Type: application/json'
+    ]);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+    curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+
+    $cobaltResponse = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($cobaltResponse && $httpCode === 200) {
+        $cobaltData = json_decode($cobaltResponse, true);
+        if (isset($cobaltData['status'])) {
+            if ($cobaltData['status'] === 'picker') {
+                $picker = $cobaltData['picker'];
+                $title = "Multi-media Content Found";
+            } else if (isset($cobaltData['filename'])) {
+                $title = $cobaltData['filename'];
+            }
         }
-    } else if (strpos($url, 'tiktok.com') !== false) {
-        $oembed = @json_decode(@file_get_contents("https://www.tiktok.com/oembed?url=" . urlencode($url)), true);
-        if ($oembed) {
-            $title = $oembed['title'] ?? $title;
-            $thumbnail = $oembed['thumbnail_url'] ?? $thumbnail;
+    }
+
+    // Fallback/Supplement with oEmbed if Cobalt didn't give a good title/thumb
+    if ($title === "Video Media" || empty($thumbnail)) {
+        if (strpos($url, 'youtube.com') !== false || strpos($url, 'youtu.be') !== false) {
+            $oembed = @json_decode(@file_get_contents("https://www.youtube.com/oembed?url=" . urlencode($url) . "&format=json"), true);
+            if ($oembed) {
+                if ($title === "Video Media") $title = $oembed['title'] ?? $title;
+                $thumbnail = $oembed['thumbnail_url'] ?? $thumbnail;
+                $thumbnail = str_replace('hqdefault', 'maxresdefault', $thumbnail);
+            }
+        } else if (strpos($url, 'tiktok.com') !== false) {
+            $oembed = @json_decode(@file_get_contents("https://www.tiktok.com/oembed?url=" . urlencode($url)), true);
+            if ($oembed) {
+                if ($title === "Video Media") $title = $oembed['title'] ?? $title;
+                if (empty($thumbnail)) $thumbnail = $oembed['thumbnail_url'] ?? $thumbnail;
+            }
+        } else if (strpos($url, 'instagram.com') !== false) {
+             // Instagram oEmbed is often restricted, but we can try basic scraping or just rely on Cobalt
         }
     }
 
@@ -74,42 +112,35 @@ try {
         'thumbnail' => $thumbnail,
         'duration_string' => '-',
         'extractor' => 'cobalt',
+        'picker' => $picker,
         'formats' => []
     ];
 
     $formats = [];
     
-    // Siapkan Opsi Download yang dialihkan melalui download.php ke API Cobalt
-    $formats[] = [
-        'format_id' => 'hq',
-        'ext' => 'mp4',
-        'height' => '1080',
-        'url' => 'download.php?action=cobalt&quality=1080&url=' . urlencode($url),
-        'quality_label' => 'hq',
-        'format_note' => 'High Quality (1080p+)'
+    // Quality options for Cobalt
+    $qualities = [
+        ['id' => 'uhq', 'label' => 'uhq', 'note' => 'Ultra Quality (4K)', 'height' => '2160'],
+        ['id' => 'hq', 'label' => 'hq', 'note' => 'High Quality (1080p)', 'height' => '1080'],
+        ['id' => 'normal', 'label' => 'normal', 'note' => 'Standard (720p)', 'height' => '720'],
+        ['id' => 'audio', 'label' => 'audio', 'note' => 'Audio (MP3)', 'height' => 'Audio'],
     ];
 
-    $formats[] = [
-        'format_id' => 'normal',
-        'ext' => 'mp4',
-        'height' => '720',
-        'url' => 'download.php?action=cobalt&quality=720&url=' . urlencode($url),
-        'quality_label' => 'normal',
-        'format_note' => 'Standard (720p)'
-    ];
-
-    $formats[] = [
-        'format_id' => 'audio',
-        'ext' => 'mp3',
-        'height' => 'Audio',
-        'url' => 'download.php?action=cobalt&quality=audio&url=' . urlencode($url),
-        'quality_label' => 'audio',
-        'format_note' => 'Audio (MP3)'
-    ];
+    foreach ($qualities as $q) {
+        $formats[] = [
+            'format_id' => $q['id'],
+            'ext' => ($q['id'] === 'audio') ? 'mp3' : 'mp4',
+            'height' => $q['height'],
+            'url' => 'download.php?action=cobalt&quality=' . $q['id'] . '&url=' . urlencode($url),
+            'quality_label' => $q['label'],
+            'format_note' => $q['note']
+        ];
+    }
 
     $response['formats'] = $formats;
 
     echo json_encode($response);
+
 } catch (Exception $e) {
     respondWithError('Server PHP Error: ' . $e->getMessage());
 }

@@ -9,7 +9,7 @@ $action = isset($_GET['action']) ? trim($_GET['action']) : 'prepare';
 
 if ($action === 'cobalt') {
     $url = isset($_GET['url']) ? trim($_GET['url']) : '';
-    $quality = isset($_GET['quality']) ? trim($_GET['quality']) : '720';
+    $quality = isset($_GET['quality']) ? trim($_GET['quality']) : '1080';
 
     if (empty($url)) {
         die("URL is empty.");
@@ -17,16 +17,30 @@ if ($action === 'cobalt') {
 
     $payload = [
         'url' => $url,
+        'filenameStyle' => 'pretty'
     ];
 
+    // Map quality labels to Cobalt numeric values
     if ($quality === 'audio') {
-          $payload['downloadMode'] = 'audio';
-          $payload['audioFormat'] = 'mp3';
-        $payload['videoQuality'] = $quality; 
+        $payload['downloadMode'] = 'audio';
+        $payload['audioFormat'] = 'mp3';
+    } else {
+        $qMap = [
+            'uhq' => '2160',
+            'hq' => '1080',
+            'normal' => '720',
+            '4320' => '4320',
+            '2160' => '2160',
+            '1080' => '1080',
+            '720' => '720',
+            '480' => '480',
+            '360' => '360'
+        ];
+        $payload['videoQuality'] = isset($qMap[$quality]) ? $qMap[$quality] : '1080';
     }
 
-    // Mengirim POST request ke Local Cobalt Server (dari Supervisord tadi)
-      $ch = curl_init('http://127.0.0.1:9001/');
+    // Mengirim POST request ke Local Cobalt Server
+    $ch = curl_init('http://127.0.0.1:9001/');
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_HTTPHEADER, [
         'Accept: application/json',
@@ -34,27 +48,36 @@ if ($action === 'cobalt') {
     ]);
     curl_setopt($ch, CURLOPT_POST, true);
     curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
-    curl_setopt($ch, CURLOPT_TIMEOUT, 30); // Timeout 30 detik untuk generate
+    curl_setopt($ch, CURLOPT_TIMEOUT, 60);
 
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
 
     if ($response === false || $httpCode !== 200) {
-        die("Error connecting to Cobalt API. Please ensure the backend is running. HTTP Code: " . $httpCode);
+        $errorMsg = ($response) ? json_decode($response, true)['error']['code'] ?? 'Unknown' : 'Connection failed';
+        die("Error connecting to Cobalt API (HTTP $httpCode): $errorMsg");
     }
 
     $json = json_decode($response, true);
-      if (isset($json['status']) && ($json['status'] === 'tunnel' || $json['status'] === 'redirect') && isset($json['url'])) {
-        // Arahkan browser user ke link download milik Cobalt
+    
+    // Check for success statuses
+    if (isset($json['status']) && in_array($json['status'], ['tunnel', 'redirect', 'picker']) && isset($json['url'])) {
         header('Location: ' . $json['url']);
         exit;
+    } else if (isset($json['status']) && $json['status'] === 'picker') {
+        // This shouldn't happen for a direct download call, but just in case
+        die("This link requires you to pick an item first.");
     } else if (isset($json['error'])) {
-        die("Cobalt Error: " . $json['error']['code']);
+        die("Cobalt Error: " . ($json['error']['code'] ?? 'Unknown error'));
+    } else if (isset($json['url'])) {
+        header('Location: ' . $json['url']);
+        exit;
     } else {
-        die("Unknown response from Cobalt: " . htmlspecialchars($response));
+        die("Unexpected response from Cobalt: " . htmlspecialchars($response));
     }
 }
+
 
 if ($action === 'serve') {
     $fileId = isset($_GET['fileId']) ? trim($_GET['fileId']) : '';

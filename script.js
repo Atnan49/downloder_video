@@ -78,10 +78,60 @@ document.addEventListener('DOMContentLoaded', () => {
             thumbContainer.innerHTML = '<i class="fa-solid fa-video"></i>';
         }
 
+        const pickerContainer = document.getElementById('pickerSection') || createPickerSection();
+        if (data.picker && data.picker.length > 0) {
+            renderPicker(data.picker, pickerContainer);
+            pickerContainer.classList.remove('hidden');
+        } else {
+            pickerContainer.classList.add('hidden');
+        }
+
         window.videoDownloadFormats = data.formats || [];
         window.videoDirectUrl = data.best_url || '';
 
         renderDownloadOptions(window.videoDownloadFormats, window.videoDirectUrl);
+    }
+
+    function createPickerSection() {
+        const section = document.createElement('div');
+        section.id = 'pickerSection';
+        section.className = 'picker-grid hidden';
+        resultSection.insertBefore(section, document.querySelector('.download-options'));
+        return section;
+    }
+
+    function renderPicker(pickerItems, container) {
+        container.innerHTML = '<h4 class="picker-title">Multiple items found:</h4>';
+        const grid = document.createElement('div');
+        grid.className = 'picker-items';
+        
+        pickerItems.forEach((item, index) => {
+            const itemEl = document.createElement('div');
+            itemEl.className = 'picker-item';
+            const thumb = item.thumb || item.url;
+            const typeIcon = item.type === 'photo' ? 'fa-image' : 'fa-video';
+            
+            itemEl.innerHTML = `
+                <div class="picker-thumb">
+                    <img src="${thumb}" alt="Item ${index + 1}">
+                    <span class="picker-type"><i class="fa-solid ${typeIcon}"></i></span>
+                </div>
+                <button class="picker-dl-btn" data-url="${item.url}" data-type="${item.type}">
+                    <i class="fa-solid fa-download"></i> Save ${item.type}
+                </button>
+            `;
+            grid.appendChild(itemEl);
+        });
+        container.appendChild(grid);
+
+        container.querySelectorAll('.picker-dl-btn').forEach(btn => {
+            btn.onclick = (e) => {
+                const itemUrl = e.currentTarget.dataset.url;
+                const type = e.currentTarget.dataset.type;
+                const dlUrl = `download.php?action=cobalt&url=${encodeURIComponent(itemUrl)}&quality=${type === 'photo' ? 'max' : 'hq'}`;
+                startDownload(dlUrl, 'hq', type === 'photo' ? 'jpg' : 'mp4');
+            };
+        });
     }
 
     function renderDownloadOptions(formats, bestUrl) {
@@ -91,7 +141,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!formats || formats.length === 0) {
             if (bestUrl) {
                 optionsContainer.innerHTML = `
-                    <button class="dl-option normal-btn" data-quality="normal">
+                    <button class="dl-option normal-btn" data-quality="normal" data-url="${bestUrl}">
                         <i class="fa-solid fa-download"></i> Download Video (Default Quality)
                     </button>
                 `;
@@ -99,48 +149,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 optionsContainer.innerHTML = '<p class="text-center">No download links found.</p>';
             }
         } else {
-            const hasNormal = formats.some(f => f.quality_label === 'normal');
-            const hasHq = formats.some(f => f.quality_label === 'hq');
-            const hasUhq = formats.some(f => f.quality_label === 'uhq');
+            formats.forEach(f => {
+                let btnClass = 'normal-btn';
+                let icon = 'fa-download';
+                let adSuffix = '';
 
-            if (hasNormal || bestUrl) {
+                if (f.quality_label === 'uhq') { btnClass = 'uhq-btn'; icon = 'fa-gem'; adSuffix = ' - Watch Ad'; }
+                else if (f.quality_label === 'hq') { btnClass = 'hq-btn'; icon = 'fa-crown'; adSuffix = ' - Watch Ad'; }
+                else if (f.quality_label.startsWith('audio')) { btnClass = 'audio-btn'; icon = 'fa-music'; }
+
                 optionsContainer.innerHTML += `
-                    <button class="dl-option normal-btn" data-quality="normal">
-                        <i class="fa-solid fa-download"></i> Standard Quality (SD)
+                    <button class="dl-option ${btnClass}" data-quality="${f.quality_label}" data-url="${f.url}">
+                        <i class="fa-solid ${icon}"></i> ${f.format_note}${adSuffix}
                     </button>
                 `;
-            }
-
-            if (hasHq) {
-                optionsContainer.innerHTML += `
-                    <button class="dl-option hq-btn" data-quality="hq">
-                        <i class="fa-solid fa-crown"></i> High Quality (HD) - Watch Ad
-                    </button>
-                `;
-            }
-
-            if (hasUhq) {
-                 optionsContainer.innerHTML += `
-                    <button class="dl-option uhq-btn" data-quality="uhq">
-                        <i class="fa-solid fa-gem"></i> Ultra Quality (4K) - Watch Ad
-                    </button>
-                `;
-            }
-
-            const hasAudio = formats.some(f => f.quality_label === 'audio');
-            if (hasAudio) {
-                 optionsContainer.innerHTML += `
-                    <button class="dl-option audio-btn" data-quality="audio">
-                        <i class="fa-solid fa-music"></i> Download MP3
-                    </button>
-                    <button class="dl-option audio-btn m4a-btn" data-quality="audio-m4a" style="background: linear-gradient(135deg, #FF416C, #FF4B2B); margin-top: 5px;">
-                        <i class="fa-solid fa-headphones"></i> Download M4A (Original)
-                    </button>
-                    <button class="dl-option audio-btn flac-btn" data-quality="audio-flac" style="background: linear-gradient(135deg, #1f4037, #99f2c8); margin-top: 5px; color: #000;">
-                        <i class="fa-solid fa-compact-disc"></i> Download FLAC (Lossless) - Watch Ad
-                    </button>
-                `;
-            }
+            });
         }
 
         attachDownloadListeners();
@@ -158,42 +181,26 @@ document.addEventListener('DOMContentLoaded', () => {
             
             newBtn.addEventListener('click', (e) => {
                 const quality = e.currentTarget.dataset.quality;
-
-                let urlToDownload = window.videoDirectUrl;
-                let downloadExt = 'mp4';
-
-                if (window.videoDownloadFormats && window.videoDownloadFormats.length > 0) {
-                    if (quality.startsWith('audio')) {
-                        const audioFormats = window.videoDownloadFormats.filter(f => f.quality_label === 'audio');
-                        audioFormats.sort((a, b) => (a.abr || 0) - (b.abr || 0));
-                        const match = audioFormats[audioFormats.length - 1] || audioFormats[0];
-                        urlToDownload = match.url;
-                        downloadExt = quality.split('-')[1] || 'mp3';
-                    } else {
-                        const match = window.videoDownloadFormats.find(f => f.quality_label === quality) 
-                                      || window.videoDownloadFormats.find(f => f.quality_label === 'normal') 
-                                      || window.videoDownloadFormats[0];
-                        urlToDownload = match.url;
-                        downloadExt = match.ext || 'mp4';
-                    }
-                }
+                const urlToDownload = e.currentTarget.dataset.url;
 
                 if (!urlToDownload) {
-                    alert('Download link not available for this quality, or video has not been analyzed yet.');
+                    alert('Download link not available.');
                     return;
                 }
                 
-                targetDownloadUrl = `download.php?url=${encodeURIComponent(window.currentVideoOriginalUrl)}&quality=${quality}&title=${encodeURIComponent(window.videoTitle)}`;
+                targetDownloadUrl = urlToDownload + `&title=${encodeURIComponent(window.videoTitle)}`;
                 targetDownloadQuality = quality;
 
-                if (quality === 'normal' || quality === 'audio' || quality === 'audio-m4a') {
-                     startDownload(targetDownloadUrl, quality, downloadExt);
-                } else {
+                // Lock high qualities behind ads
+                if (quality === 'uhq' || quality === 'hq' || quality === 'audio-flac') {
                      showAdModal();
+                } else {
+                     startDownload(targetDownloadUrl, quality);
                 }
             });
         });
     }
+
 
     attachDownloadListeners();
 
