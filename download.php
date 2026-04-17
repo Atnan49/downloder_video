@@ -85,9 +85,11 @@ if ($action === 'cobalt') {
     if ($json && isset($json['url'])) {
         $downloadUrl = $json['url'];
         
-        // Final sanity check: If it's a relative URL, prepend the domain
-        if (strpos($downloadUrl, 'http') !== 0) {
-            $downloadUrl = 'https://tarifter.com' . (strpos($downloadUrl, '/') === 0 ? '' : '/') . $downloadUrl;
+        // Internalize the URL for server-side fetching (Bypass public IP routing)
+        if (strpos($downloadUrl, 'https://tarifter.com/') !== false) {
+            $downloadUrl = str_replace('https://tarifter.com/', 'http://localhost/', $downloadUrl);
+        } elseif (strpos($downloadUrl, 'http') !== 0) {
+            $downloadUrl = 'http://localhost' . (strpos($downloadUrl, '/') === 0 ? '' : '/') . $downloadUrl;
         }
 
         // --- OPTION: Stream the file directly to avoid routing/proxy issues ---
@@ -95,15 +97,6 @@ if ($action === 'cobalt') {
         if (isset($json['filename'])) {
             $fileName = $json['filename'];
         }
-
-        // Forward headers to the browser
-        header('Content-Description: File Transfer');
-        header('Content-Type: application/octet-stream');
-        header('Content-Disposition: attachment; filename="' . $fileName . '"');
-        header('Content-Transfer-Encoding: binary');
-        header('Expires: 0');
-        header('Cache-Control: must-revalidate');
-        header('Pragma: public');
 
         // Use CURL again to fetch the stream to ensure internal port access works
         $sch = curl_init($downloadUrl);
