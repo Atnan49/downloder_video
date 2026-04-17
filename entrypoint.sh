@@ -15,7 +15,7 @@ fi
 # Ensure Cobalt listens on all interfaces inside the container
 export API_LISTEN_ADDRESS="0.0.0.0"
 export API_PORT="9001"
-export COOKIE_PATH="/var/www/html/cookies.txt"
+export COOKIE_PATH="/var/www/html/cookies.json"
 
 # Force disable conflicting MPMs and ensure prefork is uniquely loaded
 rm -f /etc/apache2/mods-enabled/mpm_*.load /etc/apache2/mods-enabled/mpm_*.conf

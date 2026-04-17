@@ -21,3 +21,4 @@ Cliping ai/
 
 # Credentials
 # cookies.txt (Enabled for Cobalt login)
+!cookies.json
