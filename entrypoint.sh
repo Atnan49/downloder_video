@@ -17,6 +17,7 @@ a2ensite 000-default.conf > /dev/null 2>&1
 
 # Use Railway's injected PORT environment variable if available
 if [ -n "$PORT" ]; then
+    echo "Running on dynamic port: $PORT"
     sed -i "s/80/$PORT/g" /etc/apache2/sites-available/000-default.conf /etc/apache2/ports.conf
 fi
 
