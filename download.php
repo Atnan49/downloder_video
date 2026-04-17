@@ -18,10 +18,13 @@ if ($action === 'cobalt') {
 
     // Environment awareness: Use internal proxy on server, public API on localhost
     $host = $_SERVER['HTTP_HOST'] ?? '';
-    $isLocal = (strpos($host, 'localhost') !== false || strpos($host, '127.0.0.1') !== false || strpos($host, '192.168') !== false);
+    // Detection for Railway/Production environment
+    $isProduction = (strpos($host, 'tarifter.com') !== false);
     
-    // Direct internal port access is usually more reliable inside Docker
-    $cobaltApiUrl = $isLocal ? 'https://tarifter.com/cobalt-api/' : 'http://127.0.0.1:9001/';
+    // Fallback chain for internal communication
+    $targets = $isProduction 
+        ? ['http://localhost/cobalt-api/', 'http://127.0.0.1:9001/', 'https://tarifter.com/cobalt-api/']
+        : ['https://tarifter.com/cobalt-api/'];
 
     $vQuality = '1080';
     if ($quality === 'uhq') $vQuality = '2160';
@@ -41,27 +44,40 @@ if ($action === 'cobalt') {
         $payload['audioFormat'] = 'mp3';
     }
 
-    $ch = curl_init($cobaltApiUrl);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
-    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        'Accept: application/json',
-        'Content-Type: application/json',
-        'User-Agent: TarifterBot/1.0 (https://tarifter.com)'
-    ]);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+    $response = false;
+    $lastError = '';
+    $finalUrl = '';
 
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $curlError = curl_error($ch);
+    foreach ($targets as $target) {
+        $ch = curl_init($target);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Accept: application/json',
+            'Content-Type: application/json',
+            'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        ]);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
 
-    // Logging to file for diagnostics
-    $logMsg = date('[Y-m-d H:i:s]') . " [Download] Target: $cobaltApiUrl | Payload: " . json_encode($payload) . " | Response: $response | HTTP: $httpCode | Error: $curlError\n";
-    file_put_contents('cobalt_debug.txt', $logMsg, FILE_APPEND);
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $lastError = curl_error($ch);
+        $finalUrl = $target;
+
+        if ($response !== false && $httpCode === 200) {
+            break;
+        }
+        curl_close($ch);
+    }
+
+    // Logging to /tmp for guaranteed Railway write access
+    $logMsg = date('[Y-m-d H:i:s]') . " [Download] Tried: " . implode(', ', $targets) . " | Success Target: $finalUrl | Response: $response | Error: $lastError\n";
+    @file_put_contents('/tmp/cobalt_debug.txt', $logMsg, FILE_APPEND);
 
     if ($response === false) {
-        die("Connectivity Error: Could not reach Cobalt API. CURL Error: $curlError");
+        die("Connectivity Error: Could not reach Cobalt API after trying multiple targets. Last Error: $lastError");
     }
 
     $json = json_decode($response, true);
