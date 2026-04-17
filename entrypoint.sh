@@ -17,6 +17,9 @@ export API_LISTEN_ADDRESS="0.0.0.0"
 export API_PORT="9001"
 export COOKIE_PATH="/var/www/html/cookies.json"
 
+# Proactively update yt-dlp to handle newest YouTube changes
+python3 -m pip install -U yt-dlp 2>/dev/null || true
+
 # Force disable conflicting MPMs and ensure prefork is uniquely loaded
 rm -f /etc/apache2/mods-enabled/mpm_*.load /etc/apache2/mods-enabled/mpm_*.conf
 a2enmod mpm_prefork > /dev/null 2>&1 || true

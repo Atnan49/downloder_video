@@ -1,6 +1,6 @@
 <?php
 $lines = file('cookies.txt', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-$youtube_cookies = [];
+$youtube_kv = [];
 
 foreach ($lines as $line) {
     if (strpos($line, '#') === 0) continue;
@@ -9,28 +9,31 @@ foreach ($lines as $line) {
     if (count($parts) < 7) continue;
     
     $domain = $parts[0];
-    $flag = $parts[1];
-    $path = $parts[2];
-    $secure = $parts[3] === 'TRUE' ? 'Secure' : '';
-    $expiration = $parts[4];
-    $name = $parts[5];
-    $value = $parts[6];
+    $name = trim($parts[5]);
+    $value = trim($parts[6]);
     
-    // Convert to cookie string format for Cobalt
-    $cookieStr = "$name=$value; Domain=$domain; Path=$path";
-    if ($expiration > 0) $cookieStr .= "; Expires=" . date('D, d M Y H:i:s T', $expiration);
-    if ($secure) $cookieStr .= "; $secure";
-    
-    // Use for youtube if domain contains youtube or google
+    // Only extract cookies for youtube/google
     if (strpos($domain, 'youtube.com') !== false || strpos($domain, 'google.com') !== false) {
-        $youtube_cookies[] = $cookieStr;
+        // Cobalt's fromString splits by '; ' and then '='
+        // We only want the core name=value pairs
+        if ($name !== '' && $value !== '') {
+            $youtube_kv[] = "$name=$value";
+        }
     }
 }
 
+// Eliminate duplicate cookies (sometimes Netscape has both secure/non-secure)
+$youtube_kv = array_unique($youtube_kv);
+
+// Join all pairs into ONE long string separated by "; "
+$cookieString = implode("; ", $youtube_kv);
+
 $output = [
-    'youtube' => $youtube_cookies
+    'youtube' => [
+        $cookieString
+    ]
 ];
 
-file_put_contents('cookies.json', json_encode($output, JSON_PRETTY_PRINT));
-echo "Converted " . count($youtube_cookies) . " cookies to cookies.json\n";
+file_put_contents('cookies.json', json_encode($output, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+echo "Successfully merged " . count($youtube_kv) . " unique cookies into cookies.json\n";
 ?>

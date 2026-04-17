@@ -82,6 +82,22 @@ if ($action === 'cobalt') {
 
     $json = json_decode($response, true);
 
+    // --- FALLBACK LOGIC: If 4K/2K fails with login error, try 1080p ---
+    if ($json && isset($json['error']) && $json['error']['code'] === 'error.api.youtube.login' && intval($vQuality) > 1080) {
+        $payload['videoQuality'] = '1080';
+        foreach ($targets as $target) {
+            $ch = curl_init($target);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Accept: application/json', 'Content-Type: application/json']);
+            $response = curl_exec($ch);
+            curl_close($ch);
+            $json = json_decode($response, true);
+            if ($json && !isset($json['error'])) break;
+        }
+    }
+
     if ($json && isset($json['url'])) {
         $downloadUrl = $json['url'];
         
@@ -92,50 +108,45 @@ if ($action === 'cobalt') {
             $downloadUrl = 'http://localhost' . (strpos($downloadUrl, '/') === 0 ? '' : '/') . $downloadUrl;
         }
 
-        // --- OPTION: Stream the file directly to avoid routing/proxy issues ---
-        $fileName = 'Tarifter.com_Video.mp4';
-        if (isset($json['filename'])) {
-            $fileName = $json['filename'];
-        }
+        $fileName = isset($json['filename']) ? $json['filename'] : 'Tarifter_Video.mp4';
 
-        // Use CURL again to fetch the stream to ensure internal port access works
+        // --- CHUNKED BINARY STREAMING (Direct Pipe to Browser) ---
         $sch = curl_init($downloadUrl);
-        curl_setopt($sch, CURLOPT_RETURNTRANSFER, true); // Get content first to check size/errors
-        curl_setopt($sch, CURLOPT_FOLLOWLOCATION, true);
-        curl_setopt($sch, CURLOPT_HTTPHEADER, [
-            'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        ]);
         
-        $streamResponse = curl_exec($sch);
-        $sInfo = curl_getinfo($sch);
-        curl_close($sch);
-
-        if ($streamResponse === false || strlen($streamResponse) < 1000) {
-            header('Content-Type: text/plain');
-            header('Content-Disposition: inline');
-            die("Cobalt Tunnel Error: Response too small or failed. Size: " . strlen($streamResponse) . " bytes. Content: " . htmlspecialchars(substr($streamResponse, 0, 500)));
-        }
-
         // Forward headers to the browser
         header('Content-Description: File Transfer');
         header('Content-Type: application/octet-stream');
         header('Content-Disposition: attachment; filename="' . $fileName . '"');
         header('Content-Transfer-Encoding: binary');
-        header('Content-Length: ' . strlen($streamResponse));
         header('Expires: 0');
         header('Cache-Control: must-revalidate');
         header('Pragma: public');
         
         // Clean output buffers
         while (ob_get_level() > 0) ob_end_clean();
-        
-        echo $streamResponse;
+
+        // Use a callback to stream data in chunks (Prevents high memory usage)
+        curl_setopt($sch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($sch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($sch, CURLOPT_SSL_VERIFYHOST, false);
+        curl_setopt($sch, CURLOPT_BUFFERSIZE, 8192); // 8KB chunks
+        curl_setopt($sch, CURLOPT_HTTPHEADER, [
+            'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        ]);
+        curl_setopt($sch, CURLOPT_WRITEFUNCTION, function($curl, $data) {
+            echo $data;
+            flush();
+            return strlen($data);
+        });
+
+        curl_exec($sch);
+        curl_close($sch);
         exit;
     } elseif ($json && isset($json['status']) && $json['status'] === 'picker') {
-         // If it's a picker even in download action, redirect back to home with the URL
          header('Location: index.html?url=' . urlencode($url));
          exit;
     } elseif ($json && isset($json['error'])) {
+        header('Content-Type: text/plain');
         die("Cobalt Error: " . ($json['error']['code'] ?? 'Unknown error') . " - " . ($json['error']['context']['service'] ?? ''));
     } else {
         header('HTTP/1.1 500 Internal Server Error');

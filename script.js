@@ -287,18 +287,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Direct Download for Cobalt or external links
-        const a = document.createElement('a');
-        a.href = url;
-        const safeTitle = window.videoTitle ? window.videoTitle.replace(/[^a-zA-Z0-9_\-\s]/g, '').trim().substring(0, 40).replace(/\s+/g, '_') : 'Video';
-        const filename = 'Tarifter.com_' + safeTitle + '_' + quality + '.' + ext;
-        
-        // Use a new tab for Cobalt links to ensure trigger works effectively
-        a.target = '_blank';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        
         showStatus('Download started!', '#38ef7d');
+        window.location.assign(url);
     }
 
 
