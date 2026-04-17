@@ -20,9 +20,8 @@ if ($action === 'cobalt') {
     ];
 
     if ($quality === 'audio') {
-        $payload['isAudioOnly'] = true;
-        // Opsional: audioFormat = "mp3" atau "best", dll. Cobalt akan nentuin sesuai source.
-    } else {
+          $payload['downloadMode'] = 'audio';
+          $payload['audioFormat'] = 'mp3';
         $payload['videoQuality'] = $quality; 
     }
 
@@ -46,7 +45,7 @@ if ($action === 'cobalt') {
     }
 
     $json = json_decode($response, true);
-    if (isset($json['status']) && ($json['status'] === 'stream' || $json['status'] === 'redirect') && isset($json['url'])) {
+      if (isset($json['status']) && ($json['status'] === 'tunnel' || $json['status'] === 'redirect') && isset($json['url'])) {
         // Arahkan browser user ke link download milik Cobalt
         header('Location: ' . $json['url']);
         exit;
