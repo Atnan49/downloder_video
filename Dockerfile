@@ -8,8 +8,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && npm install -g pnpm \
     && rm -rf /var/lib/apt/lists/*
 
-# Fix mpm_event issue on Railway and enable proxy for Cobalt API
-RUN a2dismod mpm_event || true ; a2dismod mpm_worker || true \
+# Fix mpm conflicts and enable proxy for Cobalt API
+RUN rm -f /etc/apache2/mods-enabled/mpm_*.load \
+    && rm -f /etc/apache2/mods-enabled/mpm_*.conf \
     && a2enmod mpm_prefork rewrite proxy proxy_http \
     && mkdir -p /var/www/html/temp_videos \
     && chmod 777 /var/www/html/temp_videos
