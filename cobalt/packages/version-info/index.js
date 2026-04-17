@@ -20,37 +20,36 @@ const pack = findFile('package.json');
 
 const readGit = (filename) => {
     if (!root) {
-        throw 'no git repository root found';
+        return null;
     }
 
     return readFile(join(root, filename), 'utf8');
 }
 
 export const getCommit = async () => {
-    return (await readGit('.git/logs/HEAD'))
-            ?.split('\n')
+    const log = await readGit('.git/logs/HEAD');
+    if (!log) return "unknown";
+    return log?.split('\n')
             ?.filter(String)
             ?.pop()
             ?.split(' ')[1];
 }
 
 export const getBranch = async () => {
-    if (process.env.CF_PAGES_BRANCH) {
-        return process.env.CF_PAGES_BRANCH;
-    }
+    if (process.env.CF_PAGES_BRANCH) return process.env.CF_PAGES_BRANCH;
+    if (process.env.WORKERS_CI_BRANCH) return process.env.WORKERS_CI_BRANCH;
 
-    if (process.env.WORKERS_CI_BRANCH) {
-        return process.env.WORKERS_CI_BRANCH;
-    }
-
-    return (await readGit('.git/HEAD'))
-            ?.replace(/^ref: refs\/heads\//, '')
+    const head = await readGit('.git/HEAD');
+    if (!head) return "main";
+    return head?.replace(/^ref: refs\/heads\//, '')
             ?.trim();
 }
 
 export const getRemote = async () => {
-    let remote = (await readGit('.git/config'))
-                    ?.split('\n')
+    const config = await readGit('.git/config');
+    if (!config) return "downloder_video";
+
+    let remote = config?.split('\n')
                     ?.find(line => line.includes('url = '))
                     ?.split('url = ')[1];
 
@@ -61,12 +60,7 @@ export const getRemote = async () => {
     }
 
     remote = remote?.replace(/\.git$/, '');
-
-    if (!remote) {
-        throw 'could not parse remote';
-    }
-
-    return remote;
+    return remote || "downloder_video";
 }
 
 export const getVersion = async () => {
