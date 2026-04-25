@@ -11,17 +11,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const dlOptions = document.querySelectorAll('.dl-option');
     
     const adModal = document.getElementById('adModal');
-    const closeAdModal = document.getElementById('closeAdModal');
     const skipAdBtn = document.getElementById('skipAdBtn');
 
     let skipTimer;
     let secondsLeft = 5;
+    let activeProgressInterval = null;
+    let activeTimerInterval = null;
+
+    let isSubmitting = false;
 
     form.addEventListener('submit', (e) => {
         e.preventDefault();
-        
-        // Trigger Adsterra Direct Link on form submission
-        window.open('https://www.profitablecpmratenetwork.com/bq5bb4z7?key=9a37fedd4aecc873e20314b6bc945d2e', '_blank');
+
+        if (isSubmitting) return;
 
         const url = urlInput.value.trim();
 
@@ -36,6 +38,10 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // Open sponsor link only AFTER validation passes
+        window.open('https://www.profitablecpmratenetwork.com/bq5bb4z7?key=9a37fedd4aecc873e20314b6bc945d2e', '_blank');
+
+        isSubmitting = true;
         setLoadingState(true);
         resultSection.classList.add('hidden');
         showStatus('Analyzing video link...', '#00f2fe');
@@ -50,6 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
         .then(response => response.json())
         .then(data => {
             setLoadingState(false);
+            isSubmitting = false;
             if (data.success) {
                 showStatus('Video found!', '#38ef7d');
                 window.currentVideoOriginalUrl = url;
@@ -61,6 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
         })
         .catch(error => {
             setLoadingState(false);
+            isSubmitting = false;
             showStatus('Failed to connect to server.', '#ff4444');
             console.error('Error:', error);
         });
@@ -72,8 +80,13 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('videoDuration').textContent = 'Duration: ' + (data.duration_string || 'N/A');
         
         const thumbContainer = document.querySelector('.thumbnail-placeholder');
-        if (data.thumbnail) {
-            thumbContainer.innerHTML = `<img src="${data.thumbnail}" alt="Thumbnail" style="width:100%; height:100%; object-fit:cover; border-radius:8px;">`;
+        if (data.thumbnail && /^https?:\/\//i.test(data.thumbnail)) {
+            const img = document.createElement('img');
+            img.src = data.thumbnail;
+            img.alt = 'Thumbnail';
+            img.style.cssText = 'width:100%; height:100%; object-fit:cover; border-radius:8px;';
+            thumbContainer.innerHTML = '';
+            thumbContainer.appendChild(img);
         } else {
             thumbContainer.innerHTML = '<i class="fa-solid fa-video"></i>';
         }
@@ -127,9 +140,10 @@ document.addEventListener('DOMContentLoaded', () => {
         container.querySelectorAll('.picker-dl-btn').forEach(btn => {
             btn.onclick = (e) => {
                 const itemUrl = e.currentTarget.dataset.url;
-                const type = e.currentTarget.dataset.type;
-                const dlUrl = `download.php?action=cobalt&url=${encodeURIComponent(itemUrl)}&quality=${type === 'photo' ? 'max' : 'hq'}`;
-                startDownload(dlUrl, 'hq', type === 'photo' ? 'jpg' : 'mp4');
+                const dlUrl = `download.php?url=${encodeURIComponent(itemUrl)}&quality=hq`;
+                targetDownloadUrl = dlUrl + `&title=${encodeURIComponent(window.videoTitle || 'Video')}`;
+                targetDownloadQuality = 'hq';
+                startDownload(targetDownloadUrl, targetDownloadQuality);
             };
         });
     }
@@ -205,9 +219,7 @@ document.addEventListener('DOMContentLoaded', () => {
     attachDownloadListeners();
 
     function startDownload(url, quality, ext = 'mp4') {
-        const isCobalt = url.includes('action=cobalt');
-
-        if (url.startsWith('download.php') && !isCobalt) {
+        if (url.startsWith('download.php')) {
             showStatus('⏳ Processing and merging video on server...', '#f39c12');
             
             const pModal = document.getElementById('processingModal');
@@ -224,7 +236,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (pModal) pModal.classList.remove('hidden');
 
             let progress = 0;
-            const progressInterval = setInterval(() => {
+            activeProgressInterval = setInterval(() => {
                 if (progress < 90) {
                     progress += Math.random() * 3;
                     if (progress > 90) progress = 90;
@@ -233,7 +245,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }, 500);
 
             let elapsed = 0;
-            const timerInterval = setInterval(() => {
+            activeTimerInterval = setInterval(() => {
                 elapsed++;
                 const mins = Math.floor(elapsed / 60);
                 const secs = elapsed % 60;
@@ -245,8 +257,10 @@ document.addEventListener('DOMContentLoaded', () => {
             fetch(url + '&action=prepare')
                 .then(response => response.json())
                 .then(data => {
-                    clearInterval(progressInterval);
-                    clearInterval(timerInterval);
+                    clearInterval(activeProgressInterval);
+                    clearInterval(activeTimerInterval);
+                    activeProgressInterval = null;
+                    activeTimerInterval = null;
 
                     if (data.success) {
                         if (progressFill) progressFill.style.width = '100%';
@@ -274,8 +288,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 })
                 .catch(error => {
-                    clearInterval(progressInterval);
-                    clearInterval(timerInterval);
+                    clearInterval(activeProgressInterval);
+                    clearInterval(activeTimerInterval);
+                    activeProgressInterval = null;
+                    activeTimerInterval = null;
                     
                     if (processingState) processingState.classList.add('hidden');
                     if (errorState) errorState.classList.remove('hidden');
@@ -286,7 +302,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Direct Download for Cobalt or external links
+        // Direct download fallback for external links
         showStatus('Download started!', '#38ef7d');
         window.location.assign(url);
     }
@@ -295,6 +311,8 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('click', (e) => {
         if (e.target.closest('#closeProcessingModal')) {
             e.preventDefault();
+            if (activeProgressInterval) { clearInterval(activeProgressInterval); activeProgressInterval = null; }
+            if (activeTimerInterval) { clearInterval(activeTimerInterval); activeTimerInterval = null; }
             const pModal = document.getElementById('processingModal');
             if (pModal) pModal.classList.add('hidden');
             return;
@@ -313,6 +331,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (e.target.id === 'processingModal') {
+            if (activeProgressInterval) { clearInterval(activeProgressInterval); activeProgressInterval = null; }
+            if (activeTimerInterval) { clearInterval(activeTimerInterval); activeTimerInterval = null; }
             document.getElementById('processingModal').classList.add('hidden');
             return;
         }

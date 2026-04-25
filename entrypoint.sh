@@ -1,23 +1,6 @@
 #!/bin/bash
 set -e
 
-# Railway automatically provides RAILWAY_STATIC_URL or custom domain env vars.
-# If available, we set Cobalt's API_URL so it constructs valid links.
-if [ ! -z "$RAILWAY_STATIC_URL" ]; then
-    export API_URL="https://${RAILWAY_STATIC_URL}/cobalt-api/"
-elif [ ! -z "$RAILWAY_PUBLIC_DOMAIN" ]; then
-    export API_URL="https://${RAILWAY_PUBLIC_DOMAIN}/cobalt-api/"
-else
-    # Fallback to localhost if running locally
-    export API_URL="http://localhost/cobalt-api/"
-fi
-
-# Ensure Cobalt listens on all interfaces inside the container
-export API_LISTEN_ADDRESS="0.0.0.0"
-export API_PORT="9001"
-export COOKIE_PATH="/var/www/html/cookies.json"
-export API_ALWAYS_PROXY="false"
-
 # Proactively update yt-dlp to handle newest YouTube changes
 python3 -m pip install -U yt-dlp 2>/dev/null || true
 
@@ -68,5 +51,5 @@ fi
 touch /tmp/rl.json
 chmod 777 /tmp/rl.json
 
-# Start supervisor which will start both Apache and Cobalt API
+# Start supervisor which will start Apache
 exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf

@@ -5,146 +5,132 @@ error_reporting(0);
 
 $action = isset($_GET['action']) ? trim($_GET['action']) : 'prepare';
 
-// --- COBALT API PROXY BLOCK ---
+function isWindowsOs() {
+    return strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
+}
+
+function getYtDlpPath() {
+    if (isWindowsOs()) {
+        $winPath = __DIR__ . DIRECTORY_SEPARATOR . 'yt-dlp.exe';
+        if (file_exists($winPath)) {
+            return $winPath;
+        }
+        return 'yt-dlp.exe';
+    }
+
+    $linuxPath = '/usr/local/bin/yt-dlp';
+    if (file_exists($linuxPath)) {
+        return $linuxPath;
+    }
+
+    $localPath = __DIR__ . DIRECTORY_SEPARATOR . 'yt-dlp';
+    if (file_exists($localPath)) {
+        return $localPath;
+    }
+
+    return 'yt-dlp';
+}
+
+function getFfmpegFlag() {
+    if (!isWindowsOs()) {
+        return '';
+    }
+
+    $ffmpegDir = __DIR__ . DIRECTORY_SEPARATOR . 'ffmpeg-master-latest-win64-gpl-shared' . DIRECTORY_SEPARATOR . 'ffmpeg-master-latest-win64-gpl-shared' . DIRECTORY_SEPARATOR . 'bin';
+    if (is_dir($ffmpegDir)) {
+        return '--ffmpeg-location ' . escapeshellarg($ffmpegDir);
+    }
+
+    return '';
+}
+
+function getFfprobePath() {
+    if (isWindowsOs()) {
+        $ffprobePath = __DIR__ . DIRECTORY_SEPARATOR . 'ffmpeg-master-latest-win64-gpl-shared' . DIRECTORY_SEPARATOR . 'ffmpeg-master-latest-win64-gpl-shared' . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . 'ffprobe.exe';
+        if (file_exists($ffprobePath)) {
+            return $ffprobePath;
+        }
+        return 'ffprobe.exe';
+    }
+
+    if (file_exists('/usr/bin/ffprobe')) {
+        return '/usr/bin/ffprobe';
+    }
+    if (file_exists('/usr/local/bin/ffprobe')) {
+        return '/usr/local/bin/ffprobe';
+    }
+
+    return 'ffprobe';
+}
+
+function videoHasAudioStream($filePath) {
+    $ffprobe = getFfprobePath();
+    $stderrRedirect = isWindowsOs() ? '2>NUL' : '2>/dev/null';
+    $cmd = escapeshellarg($ffprobe) . ' -v error -select_streams a:0 -show_entries stream=index -of csv=p=0 ' . escapeshellarg($filePath) . ' ' . $stderrRedirect;
+    $out = trim((string) shell_exec($cmd));
+    return $out !== '';
+}
+
+function normalizeQuality($quality) {
+    $allowed = ['uhq', 'hq', 'normal', 'audio-m4a', 'audio-flac'];
+    if (!in_array($quality, $allowed, true)) {
+        return 'hq';
+    }
+    return $quality;
+}
+
+function getTempDir() {
+    $tempDir = __DIR__ . DIRECTORY_SEPARATOR . 'temp_videos';
+    if (!file_exists($tempDir)) {
+        mkdir($tempDir, 0777, true);
+    }
+    return $tempDir;
+}
+
+function cleanupOldTempFiles($tempDir) {
+    if (rand(1, 3) !== 1) {
+        return;
+    }
+
+    foreach (glob($tempDir . DIRECTORY_SEPARATOR . 'vid_*.*') as $file) {
+        if (file_exists($file) && filemtime($file) < time() - 3600) {
+            @unlink($file);
+        }
+    }
+}
+
+function getExtFromQuality($quality) {
+    if ($quality === 'audio-flac') {
+        return 'flac';
+    }
+    if ($quality === 'audio-m4a') {
+        return 'm4a';
+    }
+    return 'mp4';
+}
+
+function getFormatSelector($quality) {
+    if ($quality === 'uhq') {
+        return 'bestvideo[height<=2160][vcodec!=none]+bestaudio[acodec!=none]/best[height<=2160][vcodec!=none][acodec!=none]';
+    }
+    if ($quality === 'normal') {
+        return 'bestvideo[height<=720][vcodec!=none]+bestaudio[acodec!=none]/best[height<=720][vcodec!=none][acodec!=none]';
+    }
+    if ($quality === 'audio-m4a' || $quality === 'audio-flac') {
+        return 'bestaudio[acodec!=none]/best[acodec!=none]';
+    }
+
+    return 'bestvideo[height<=1080][vcodec!=none]+bestaudio[acodec!=none]/best[height<=1080][vcodec!=none][acodec!=none]';
+}
+
 if ($action === 'cobalt') {
-    $url = isset($_GET['url']) ? trim($_GET['url']) : '';
-    $quality = isset($_GET['quality']) ? trim($_GET['quality']) : '1080';
-
-    if (empty($url)) {
-        die("URL is empty.");
-    }
-
-    $isAudio = (strpos($quality, 'audio') !== false);
-
-    // Environment awareness: Use internal proxy on server, public API on localhost
-    $host = $_SERVER['HTTP_HOST'] ?? '';
-    // Detection for Railway/Production environment
-    $isProduction = (strpos($host, 'tarifter.com') !== false);
-    
-    // Fallback chain for internal communication
-    $targets = $isProduction 
-        ? ['http://localhost/cobalt-api/', 'http://127.0.0.1:9001/', 'https://tarifter.com/cobalt-api/']
-        : ['https://tarifter.com/cobalt-api/'];
-
-    $vQuality = '1080';
-    if ($quality === 'uhq') $vQuality = '2160';
-    elseif ($quality === 'hq') $vQuality = '1080';
-    elseif ($quality === 'normal') $vQuality = '720';
-    elseif (is_numeric($quality)) $vQuality = $quality;
-
-    $isYouTube = (strpos($url, 'youtube.com') !== false || strpos($url, 'youtu.be') !== false);
-    
-    $payload = [
-        'url' => $url,
-        'videoQuality' => $vQuality,
-        'filenameStyle' => 'pretty',
-        'alwaysProxy' => $isYouTube ? false : true // Disable proxy for YouTube to bypass bot detection
-    ];
-
-    if ($isAudio) {
-        $payload['downloadMode'] = 'audio';
-        $payload['audioFormat'] = 'mp3';
-    }
-
-    // --- INITIAL COBALT API CALL ---
-    $response = false;
-    $httpCode = 0;
-    
-    foreach ($targets as $target) {
-        $ch = curl_init($target);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Accept: application/json',
-            'Content-Type: application/json',
-            'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        ]);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($response !== false && $httpCode === 200) break;
-    }
-
-    $json = json_decode($response, true);
-
-    // --- FALLBACK LOGIC: If login error pops up, try the "Minimalist/Metadata" payload ---
-    if ($json && isset($json['error']) && $json['error']['code'] === 'error.api.youtube.login') {
-        $minimalPayload = ['url' => $url];
-        foreach ($targets as $target) {
-            $ch = curl_init($target);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($minimalPayload));
-            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Accept: application/json', 'Content-Type: application/json']);
-            $response = curl_exec($ch);
-            curl_close($ch);
-            $json = json_decode($response, true);
-            if ($json && !isset($json['error'])) break;
-        }
-    }
-
-    if ($response === false || empty($response)) {
-        die("Connectivity Error: Could not reach Cobalt API endpoints.");
-    }
-
-    if ($json && isset($json['url'])) {
-        $downloadUrl = $json['url'];
-        
-        // Internalize the URL for server-side fetching (Bypass public IP routing)
-        if (strpos($downloadUrl, 'https://tarifter.com/') !== false) {
-            $downloadUrl = str_replace('https://tarifter.com/', 'http://localhost/', $downloadUrl);
-        } elseif (strpos($downloadUrl, 'http') !== 0) {
-            $downloadUrl = 'http://localhost' . (strpos($downloadUrl, '/') === 0 ? '' : '/') . $downloadUrl;
-        }
-
-        $fileName = isset($json['filename']) ? $json['filename'] : 'Tarifter_Video.mp4';
-
-        // --- CHUNKED BINARY STREAMING (Direct Pipe to Browser) ---
-        $sch = curl_init($downloadUrl);
-        
-        // Forward headers to the browser
-        header('Content-Description: File Transfer');
-        header('Content-Type: application/octet-stream');
-        header('Content-Disposition: attachment; filename="' . $fileName . '"');
-        header('Content-Transfer-Encoding: binary');
-        header('Expires: 0');
-        header('Cache-Control: must-revalidate');
-        header('Pragma: public');
-        
-        // Clean output buffers
-        while (ob_get_level() > 0) ob_end_clean();
-
-        // Use a callback to stream data in chunks (Prevents high memory usage)
-        curl_setopt($sch, CURLOPT_FOLLOWLOCATION, true);
-        curl_setopt($sch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($sch, CURLOPT_SSL_VERIFYHOST, false);
-        curl_setopt($sch, CURLOPT_BUFFERSIZE, 8192); // 8KB chunks
-        curl_setopt($sch, CURLOPT_HTTPHEADER, [
-            'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        ]);
-        curl_setopt($sch, CURLOPT_WRITEFUNCTION, function($curl, $data) {
-            echo $data;
-            flush();
-            return strlen($data);
-        });
-
-        curl_exec($sch);
-        curl_close($sch);
-        exit;
-    } elseif ($json && isset($json['status']) && $json['status'] === 'picker') {
-         header('Location: index.html?url=' . urlencode($url));
-         exit;
-    } elseif ($json && isset($json['error'])) {
-        header('Content-Type: text/plain');
-        die("Cobalt Error: " . ($json['error']['code'] ?? 'Unknown error') . "\nFull Response: " . $response);
-    } else {
-        header('HTTP/1.1 500 Internal Server Error');
-        header('Content-Type: text/plain');
-        die("Unexpected response from Cobalt (HTTP $httpCode):\n" . $response);
-    }
+    header('Content-Type: application/json');
+    http_response_code(410);
+    echo json_encode([
+        'success' => false,
+        'error' => 'Cobalt mode has been disabled. Please use yt-dlp prepare mode.'
+    ]);
+    exit;
 }
 
 // --- SERVE ACTION ---
@@ -168,7 +154,15 @@ if ($action === 'serve') {
         $safeTitle = trim(substr($safeTitle, 0, 40));
         $safeTitle = preg_replace('/\s+/', '_', $safeTitle);
 
-        $mime = ($ext === 'mp4') ? 'video/mp4' : 'audio/' . $ext;
+        if ($ext === 'mp4') {
+            $mime = 'video/mp4';
+        } elseif ($ext === 'm4a') {
+            $mime = 'audio/mp4';
+        } elseif ($ext === 'flac') {
+            $mime = 'audio/flac';
+        } else {
+            $mime = 'application/octet-stream';
+        }
         header('Content-Type: ' . $mime);
         header('Content-Disposition: attachment; filename="Tarifter.com_' . $safeTitle . '_' . $quality . '.' . $ext . '"');
         header('Content-Length: ' . filesize($tempFile));
@@ -196,10 +190,10 @@ if ($action === 'serve') {
     }
 }
 
-// --- PREPARE ACTION (Using yt-dlp fallback) ---
+// --- PREPARE ACTION (yt-dlp only) ---
 if ($action === 'prepare') {
     $url = isset($_GET['url']) ? trim($_GET['url']) : '';
-    $quality = isset($_GET['quality']) ? trim($_GET['quality']) : 'hq';
+    $quality = normalizeQuality(isset($_GET['quality']) ? trim($_GET['quality']) : 'hq');
 
     if (empty($url)) {
         header('Content-Type: application/json');
@@ -214,77 +208,70 @@ if ($action === 'prepare') {
         exit;
     }
 
-    $tempDir = __DIR__ . DIRECTORY_SEPARATOR . 'temp_videos';
-    if (!file_exists($tempDir)) {
-        mkdir($tempDir, 0777, true);
-    }
-
-    if (rand(1, 10) === 1) {
-        foreach (glob($tempDir . DIRECTORY_SEPARATOR . "vid_*.*") as $file) {
-            if (file_exists($file) && filemtime($file) < time() - 3600) {
-                @unlink($file);
-            }
-        }
-    }
-
-    if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-        $ytDlpPath = __DIR__ . DIRECTORY_SEPARATOR . 'yt-dlp.exe';
-    } else {
-        $ytDlpPath = '/usr/local/bin/yt-dlp';
-        if (!file_exists($ytDlpPath)) {
-            $ytDlpPath = __DIR__ . DIRECTORY_SEPARATOR . 'yt-dlp';
-        }
-    }
+    $tempDir = getTempDir();
+    cleanupOldTempFiles($tempDir);
+    $ytDlpPath = getYtDlpPath();
 
     $fileId = uniqid('vid_');
-    if (strpos($quality, 'audio') === 0) {
-        if ($quality === 'audio-flac') $ext = 'flac';
-        elseif ($quality === 'audio-m4a') $ext = 'm4a';
-        else $ext = 'mp3';
-    } else {
-        $ext = 'mp4';
-    }
+    $ext = getExtFromQuality($quality);
 
     $tempFile = $tempDir . DIRECTORY_SEPARATOR . $fileId . '.' . $ext;
 
-    if ($quality === 'uhq') {
-        $formatStr = 'bestvideo[height<=2160][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=2160]+bestaudio/best';
-    } elseif (strpos($quality, 'audio') === 0) {
-        $formatStr = 'bestaudio/best';
-    } elseif ($quality === 'normal') {
-        $formatStr = 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best';
-    } else {
-        $formatStr = 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best';
-    }
+    $formatStr = getFormatSelector($quality);
+    $ffmpegFlag = getFfmpegFlag();
 
-    if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-        $ffmpegDir = __DIR__ . DIRECTORY_SEPARATOR . 'ffmpeg-master-latest-win64-gpl-shared' . DIRECTORY_SEPARATOR . 'ffmpeg-master-latest-win64-gpl-shared' . DIRECTORY_SEPARATOR . 'bin';
-        $ffmpegFlag = '--ffmpeg-location ' . escapeshellarg($ffmpegDir);
+    if ($quality === 'audio-m4a') {
+        $extraFlags = '--extract-audio --audio-format m4a --audio-quality 0';
+    } elseif ($quality === 'audio-flac') {
+        $extraFlags = '--extract-audio --audio-format flac --audio-quality 0';
     } else {
-        $ffmpegFlag = '';
-    }
-
-    if (strpos($quality, 'audio') === 0) {
-        $extraFlags = '--extract-audio --audio-format ' . $ext;
-    } else {
+        // Video branch always merges with best available audio track.
         $extraFlags = '--merge-output-format mp4';
     }
 
-    $clientBypass = '--extractor-args "youtube:player_client=ios,android,web" --no-warnings';
+    $clientBypass = '--extractor-args "youtube:player_client=ios,android,web" --no-warnings --no-playlist';
     $cookiesFile = __DIR__ . DIRECTORY_SEPARATOR . 'cookies.txt';
 
     if (file_exists($cookiesFile)) {
         $clientBypass .= ' --cookies ' . escapeshellarg($cookiesFile);
-    } else if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-        $clientBypass .= ' --cookies-from-browser chrome';
     }
 
-    $cmd = escapeshellarg($ytDlpPath) . ' ' . $clientBypass . ' -f "' . $formatStr . '" ' . $ffmpegFlag . ' ' . $extraFlags . ' -o ' . escapeshellarg($tempFile) . ' ' . escapeshellarg($url) . ' 2>&1';
+    // Prepend FFmpeg bin directory to PATH so shared DLLs can be found
+    $ffmpegBinDir = __DIR__ . DIRECTORY_SEPARATOR . 'ffmpeg-master-latest-win64-gpl-shared' . DIRECTORY_SEPARATOR . 'ffmpeg-master-latest-win64-gpl-shared' . DIRECTORY_SEPARATOR . 'bin';
+    if (isWindowsOs() && is_dir($ffmpegBinDir)) {
+        putenv('PATH=' . $ffmpegBinDir . ';' . getenv('PATH'));
+    }
+
+    $cmdParts = [
+        escapeshellarg($ytDlpPath),
+        $clientBypass,
+        '-f ' . escapeshellarg($formatStr),
+        $ffmpegFlag,
+        $extraFlags,
+        '-o ' . escapeshellarg($tempFile),
+        escapeshellarg($url),
+        '2>&1'
+    ];
+
+    $cmd = implode(' ', array_filter($cmdParts, function($part) {
+        return $part !== '';
+    }));
+
     $output = shell_exec($cmd);
 
     header('Content-Type: application/json');
 
     if (file_exists($tempFile) && filesize($tempFile) > 0) {
+        if ($ext === 'mp4' && !videoHasAudioStream($tempFile)) {
+            @unlink($tempFile);
+            echo json_encode([
+                'success' => false,
+                'error' => 'Video has no audio stream. Please try a different quality or try again.',
+                'logs' => $output
+            ]);
+            exit;
+        }
+
         echo json_encode([
             'success' => true,
             'fileId' => $fileId,
@@ -295,9 +282,16 @@ if ($action === 'prepare') {
     } else {
         echo json_encode([
             'success' => false,
-            'error' => 'Gagal mengunduh dan memproses video. Pastikan server memiliki FFmpeg terinstall.',
+            'error' => 'Failed to download and process video. Please ensure FFmpeg is installed on the server.',
             'logs' => $output
         ]);
     }
     exit;
 }
+
+header('Content-Type: application/json');
+http_response_code(400);
+echo json_encode([
+    'success' => false,
+    'error' => 'Invalid action.'
+]);

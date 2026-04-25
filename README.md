@@ -9,7 +9,7 @@ A high-performance, universal video and audio downloading web application. Built
 
 - **Universal Compatibility:** Download from YouTube, Instagram, TikTok, Spotify (via fallback lookup), and hundreds of other platforms supported by `yt-dlp`.
 - **Ultra High Quality (4K):** Seamlessly extracts and merges UHQ video (up to 2160p) and the best available audio natively via FFmpeg.
-- **Advanced Audio Extraction:** Support for High-Quality MP3, M4A (Original Apple AAC), and FLAC (Lossless) formats.
+- **Advanced Audio Extraction:** Support for M4A (Original Apple AAC) and FLAC (Lossless) formats.
 - **No Login Required:** Utilizes advanced `yt-dlp` client bypasses (`youtube:player_client=web,default`) to prevent `403 Forbidden` and bot-blocking errors without relying on authentication.
 - **Fast Processing & Caching:** Built-in JSON metadata caching (`1800s` TTL) and periodic temp file cleanup mechanisms.
 - **Rate Limiting & Security:** Integrated IP-based rate limiting to prevent API abuse and excessive server load.

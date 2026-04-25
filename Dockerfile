@@ -1,17 +1,14 @@
 FROM php:8.2-apache
 
-# Install dependencies needed by Cobalt API, yt-dlp fallback (optional), and Supervisor
+# Install dependencies needed by PHP downloader, yt-dlp, FFmpeg, and Supervisor
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    wget curl git ffmpeg supervisor python3 make g++ \
-    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
-    && apt-get install -y nodejs \
-    && npm install -g pnpm \
+    wget curl ffmpeg supervisor python3 \
     && rm -rf /var/lib/apt/lists/*
 
-# Fix mpm conflicts and enable proxy for Cobalt API
+# Fix mpm conflicts and enable required Apache modules
 RUN rm -f /etc/apache2/mods-enabled/mpm_*.load \
     && rm -f /etc/apache2/mods-enabled/mpm_*.conf \
-    && a2enmod mpm_prefork rewrite proxy proxy_http \
+    && a2enmod mpm_prefork rewrite \
     && echo "ServerName localhost" > /etc/apache2/conf-available/servername.conf \
     && a2enconf servername \
     && mkdir -p /var/www/html/temp_videos \
@@ -20,14 +17,9 @@ RUN rm -f /etc/apache2/mods-enabled/mpm_*.load \
 # Copy app files
 COPY . /var/www/html/
 
-# Copy custom Apache virtual host configuring ProxyPass to Cobalt
+# Copy custom Apache virtual host
 COPY 000-default.conf /etc/apache2/sites-available/000-default.conf
 
-# Setup Cobalt dependencies
-WORKDIR /var/www/html/cobalt
-RUN pnpm install --no-frozen-lockfile
-
-# Return to web root
 WORKDIR /var/www/html
 
 EXPOSE 80
