@@ -2,7 +2,8 @@
 set -e
 
 # Proactively update yt-dlp to handle newest YouTube changes
-python3 -m pip install -U yt-dlp 2>/dev/null || true
+wget -qO /usr/local/bin/yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp
+chmod a+rx /usr/local/bin/yt-dlp
 
 # Force disable conflicting MPMs and ensure prefork is uniquely loaded
 rm -f /etc/apache2/mods-enabled/mpm_*.load /etc/apache2/mods-enabled/mpm_*.conf
