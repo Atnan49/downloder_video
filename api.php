@@ -63,15 +63,22 @@ function extractMetadataWithYtDlp($url) {
     }
 
     $json = json_decode($raw, true);
+    $jsonError1 = json_last_error_msg();
     if (!is_array($json)) {
-        if (preg_match('/\{[\s\S]*\}\s*$/', trim($raw), $m)) {
-            $json = json_decode($m[0], true);
+        // Find the first { and last } to manually extract JSON instead of regex which causes PCRE limits
+        $start = strpos($raw, '{');
+        $end = strrpos($raw, '}');
+        if ($start !== false && $end !== false && $end > $start) {
+            $jsonStr = substr($raw, $start, $end - $start + 1);
+            $json = json_decode($jsonStr, true);
         }
     }
 
     if (!is_array($json)) {
+        $jsonError2 = json_last_error_msg();
         $debugRaw = substr(trim($raw), 0, 500);
-        throw new RuntimeException('Invalid metadata payload from yt-dlp. Raw: ' . $debugRaw);
+        $len = strlen($raw);
+        throw new RuntimeException("Invalid metadata. len=$len, err1=$jsonError1, err2=$jsonError2 | Raw: " . $debugRaw);
     }
 
     $title = $json['title'] ?? ($json['fulltitle'] ?? 'Video Media');
