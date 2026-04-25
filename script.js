@@ -426,4 +426,22 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }, 4000);
     }
+
+    // Cookie Consent Logic
+    const cookieModal = document.getElementById('cookieConsentModal');
+    const acceptCookieBtn = document.getElementById('acceptCookieBtn');
+
+    if (cookieModal && acceptCookieBtn) {
+        if (!localStorage.getItem('cookieAccepted')) {
+            cookieModal.classList.remove('hidden');
+        }
+
+        acceptCookieBtn.addEventListener('click', () => {
+            localStorage.setItem('cookieAccepted', 'true');
+            cookieModal.style.animation = 'slideUp 0.5s ease reverse forwards';
+            setTimeout(() => {
+                cookieModal.classList.add('hidden');
+            }, 500);
+        });
+    }
 });
