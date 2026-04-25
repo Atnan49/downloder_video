@@ -54,7 +54,7 @@ function extractMetadataWithYtDlp($url) {
         $baseFlags .= ' --cookies ' . escapeshellarg($cookiesFile);
     }
 
-    $stderrRedirect = (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') ? '2>NUL' : '2>/dev/null';
+    $stderrRedirect = '2>&1';
     $cmd = escapeshellarg($ytDlpPath) . ' ' . $baseFlags . ' ' . escapeshellarg($url) . ' ' . $stderrRedirect;
     $raw = shell_exec($cmd);
 
@@ -70,7 +70,8 @@ function extractMetadataWithYtDlp($url) {
     }
 
     if (!is_array($json)) {
-        throw new RuntimeException('Invalid metadata payload from yt-dlp.');
+        $debugRaw = substr(trim($raw), 0, 500);
+        throw new RuntimeException('Invalid metadata payload from yt-dlp. Raw: ' . $debugRaw);
     }
 
     $title = $json['title'] ?? ($json['fulltitle'] ?? 'Video Media');
