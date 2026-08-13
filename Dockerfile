@@ -1,29 +1,30 @@
-FROM node:22-slim
+FROM ghcr.io/jim60105/yt-dlp:pot
 
-# Install ffmpeg, python3, and yt-dlp binary directly
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg \
-    python3 \
-    curl \
-    ca-certificates \
-    && curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
-    && chmod a+rx /usr/local/bin/yt-dlp \
-    && /usr/local/bin/yt-dlp --version \
-    && rm -rf /var/lib/apt/lists/*
+USER root
+
+# Install Node.js on Alpine
+RUN apk update && apk add --no-cache nodejs npm
+
+# Verify tools are installed
+RUN yt-dlp --version && node --version && ffmpeg -version | head -1
 
 WORKDIR /app
 
-# Copy dependencies & install ALL (including devDependencies for vite build)
+# Install dependencies
 COPY package*.json ./
 RUN npm install
 
-# Copy source code & build frontend
+# Copy source and build
 COPY . .
 RUN npm run build
 
-# Prune devDependencies after build to shrink image
+# Prune dev deps
 RUN npm prune --omit=dev
 
 EXPOSE 3000
+
+# Create non-root user for security
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+USER appuser
 
 CMD ["node", "server/index.js"]
