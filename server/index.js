@@ -26,7 +26,7 @@ const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
 
 // Health Check Endpoint
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', engine: 'Native yt-dlp Direct Stream Engine', time: new Date().toISOString() });
+  res.json({ status: 'ok', engine: 'Native yt-dlp Temp File Engine', time: new Date().toISOString() });
 });
 
 // Extract Video Metadata Endpoint
@@ -106,7 +106,7 @@ app.post('/api/info', async (req, res) => {
       format: 'MP4',
       type: 'video',
       size: '480p SD Stream',
-      url: `/api/download?url=${encodeURIComponent(cleanUrl)}&format=mp4&quality=480`
+      url: `/api/download?url=${encodeURIComponent(cleanUrl)}&format=480`
     },
     {
       id: 'yt_dlp_mp3',
@@ -149,7 +149,7 @@ app.post('/api/info', async (req, res) => {
   });
 });
 
-// Stream Download Endpoint using yt-dlp Direct Stream URL & File Buffer
+// Stream Download Endpoint using Native yt-dlp Temp File Merging Engine
 app.get('/api/download', async (req, res) => {
   const { url, format = 'mp4', quality = '1080' } = req.query;
 
@@ -162,68 +162,48 @@ app.get('/api/download', async (req, res) => {
   const safeFilename = `media_download_${Date.now()}.${ext}`;
 
   const YTDLP_BIN = process.platform === 'win32' ? 'yt-dlp' : '/usr/local/bin/yt-dlp';
-
-  try {
-    // 1. Resolve Direct CDN Stream URL using yt-dlp -g
-    let formatFilter = `bestvideo[height<=${quality}][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best`;
-    if (ext === 'mp3' || ext === 'm4a' || ext === 'flac') {
-      formatFilter = 'bestaudio[ext=m4a]/bestaudio/best';
-    }
-
-    const cmd = `${YTDLP_BIN} -g -f "${formatFilter}" --extractor-args "youtube:player_client=ios,android,web" --geo-bypass --no-check-certificates "${cleanUrl}"`;
-    const { stdout } = await execPromise(cmd, { timeout: 12000 });
-
-    const urls = stdout.trim().split('\n').filter(u => u.startsWith('http'));
-
-    if (urls.length > 0) {
-      const streamUrl = urls[0]; // Take primary stream URL
-
-      // Proxy binary stream via Axios directly to client
-      const streamResponse = await axios.get(streamUrl, {
-        responseType: 'stream',
-        headers: {
-          'User-Agent': USER_AGENT
-        },
-        timeout: 30000
-      });
-
-      const contentType = ext === 'mp3' ? 'audio/mpeg' : (ext === 'flac' ? 'audio/flac' : 'video/mp4');
-
-      res.setHeader('Content-Type', contentType);
-      res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`);
-      if (streamResponse.headers['content-length']) {
-        res.setHeader('Content-Length', streamResponse.headers['content-length']);
-      }
-
-      return streamResponse.data.pipe(res);
-    }
-  } catch (err) {
-    console.warn('yt-dlp -g stream fetch warning, falling back to temp file download:', err.message);
-  }
-
-  // 2. Temp File Muxing Fallback (If direct stream url fetch failed)
   const tempDir = os.tmpdir();
-  const tempFilePath = path.join(tempDir, `yt_temp_${Date.now()}.${ext}`);
+  const tempFileBase = path.join(tempDir, `yt_${Date.now()}_${Math.random().toString(36).substring(7)}`);
+  const tempFilePath = `${tempFileBase}.${ext}`;
 
   try {
-    let dlCmd = `${YTDLP_BIN} -f "bestvideo[height<=${quality}][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --recode-video mp4 --extractor-args "youtube:player_client=ios,android,web" --geo-bypass --no-check-certificates -o "${tempFilePath}" "${cleanUrl}"`;
+    let dlCmd = `${YTDLP_BIN} -f "best[ext=mp4]/bestvideo[height<=${quality}][ext=mp4]+bestaudio[ext=m4a]/best" --extractor-args "youtube:player_client=ios,android,web" --geo-bypass --no-check-certificates -o "${tempFilePath}" "${cleanUrl}"`;
+    
     if (ext === 'mp3') {
       dlCmd = `${YTDLP_BIN} -x --audio-format mp3 --audio-quality 0 --extractor-args "youtube:player_client=ios,android,web" --geo-bypass --no-check-certificates -o "${tempFilePath}" "${cleanUrl}"`;
+    } else if (ext === 'flac') {
+      dlCmd = `${YTDLP_BIN} -x --audio-format flac --extractor-args "youtube:player_client=ios,android,web" --geo-bypass --no-check-certificates -o "${tempFilePath}" "${cleanUrl}"`;
+    } else if (ext === 'm4a') {
+      dlCmd = `${YTDLP_BIN} -f "ba[ext=m4a]/ba" --extractor-args "youtube:player_client=ios,android,web" --geo-bypass --no-check-certificates -o "${tempFilePath}" "${cleanUrl}"`;
     }
 
-    await execPromise(dlCmd, { timeout: 45000 });
+    // Execute yt-dlp to download & merge directly into temp file on server disk
+    await execPromise(dlCmd, { timeout: 60000 });
 
     if (fs.existsSync(tempFilePath)) {
-      return res.download(tempFilePath, safeFilename, () => {
-        try { fs.unlinkSync(tempFilePath); } catch (e) {}
+      return res.download(tempFilePath, safeFilename, (err) => {
+        try { if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath); } catch (e) {}
       });
     }
+
+    // Check if yt-dlp created temp file with slightly different extension
+    const matchedFiles = fs.readdirSync(tempDir).filter(f => f.startsWith(path.basename(tempFileBase)));
+    if (matchedFiles.length > 0) {
+      const actualPath = path.join(tempDir, matchedFiles[0]);
+      return res.download(actualPath, safeFilename, (err) => {
+        try { if (fs.existsSync(actualPath)) fs.unlinkSync(actualPath); } catch (e) {}
+      });
+    }
+
   } catch (dlErr) {
-    console.error('Temp file download error:', dlErr.message);
-    try { if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath); } catch (e) {}
+    console.error('yt-dlp temp file download error:', dlErr.message);
+    try {
+      const files = fs.readdirSync(tempDir).filter(f => f.startsWith(path.basename(tempFileBase)));
+      files.forEach(f => fs.unlinkSync(path.join(tempDir, f)));
+    } catch (e) {}
   }
 
-  return res.status(500).send('Gagal mengunduh file video. Silakan coba kembali.');
+  return res.status(500).send('Gagal memproses dan mengunduh berkas video. Silakan coba kembali.');
 });
 
 // SPA Fallback Route
@@ -232,5 +212,5 @@ app.get('*', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Render Server with Direct Stream Engine running on port ${PORT}`);
+  console.log(`Render Server with Native Temp File Engine running on port ${PORT}`);
 });
