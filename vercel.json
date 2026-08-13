@@ -1,27 +1,8 @@
 {
-  "version": 2,
-  "name": "downloader-atnan-my-id",
-  "builds": [
+  "rewrites": [
     {
-      "src": "api/**/*.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist"
-      }
-    }
-  ],
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "/api/$1"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
+      "source": "/((?!api/|assets/|sitemap.xml|robots.txt).*)",
+      "destination": "/index.html"
     }
   ],
   "headers": [
