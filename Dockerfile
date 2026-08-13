@@ -27,4 +27,6 @@ EXPOSE 3000
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 USER appuser
 
+# Override the default entrypoint of yt-dlp base image
+ENTRYPOINT []
 CMD ["node", "server/index.js"]
