@@ -68,7 +68,7 @@ export default function App() {
     try {
       const response = await axios.post('/api/info', { url: targetUrl }, {
         headers: { 'Content-Type': 'application/json' },
-        timeout: 15000
+        timeout: 18000
       });
 
       if (response.data && response.data.success && response.data.data) {
@@ -103,17 +103,21 @@ export default function App() {
       const downloadFilename = mediaData?.title || 'video-download';
       const fileFormat = (fmt.format || 'mp4').toLowerCase();
 
-      // Trigger download via /api/download proxy or direct stream link
-      const proxyDownloadUrl = `/api/download?url=${encodeURIComponent(fmt.url)}&filename=${encodeURIComponent(downloadFilename)}&format=${fileFormat}`;
-
-      // Create invisible anchor tag to trigger browser download
-      const a = document.createElement('a');
-      a.href = proxyDownloadUrl;
-      a.download = `${downloadFilename}.${fileFormat}`;
-      a.target = '_blank';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      // Trigger high-speed direct stream download or proxy
+      if (fmt.url.includes('cobalt.tools') || fmt.url.includes('co.wuk.sh') || fmt.url.includes('tiktokcdn.com')) {
+        // Direct browser stream download to prevent Vercel 4.5MB payload cuts
+        window.open(fmt.url, '_blank');
+      } else {
+        // Proxy download via /api/download
+        const proxyDownloadUrl = `/api/download?url=${encodeURIComponent(fmt.url)}&filename=${encodeURIComponent(downloadFilename)}&format=${fileFormat}`;
+        const a = document.createElement('a');
+        a.href = proxyDownloadUrl;
+        a.download = `${downloadFilename}.${fileFormat}`;
+        a.target = '_blank';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
 
       // Save to download history
       saveToHistory({
@@ -129,7 +133,6 @@ export default function App() {
 
     } catch (err) {
       console.error('Download trigger error:', err);
-      // Fallback: direct window open
       window.open(fmt.url, '_blank');
     } finally {
       setTimeout(() => setDownloadingId(null), 1500);
@@ -159,7 +162,7 @@ export default function App() {
           </h1>
 
           <p className="text-sm sm:text-base text-zinc-400 max-w-xl mx-auto leading-relaxed">
-            Dukung pengunduhan dari <strong className="text-white">TikTok (No-WM)</strong>, <strong className="text-white">YouTube (4K & Shorts)</strong>, <strong className="text-white">Instagram Reels</strong>, dan audio format <strong className="text-white">MP3, M4A, FLAC Lossless</strong>.
+            Dukung pengunduhan dari <strong className="text-white">TikTok (No-WM)</strong>, <strong className="text-white">YouTube (1080p Full HD)</strong>, <strong className="text-white">Instagram Reels</strong>, dan audio format <strong className="text-white">MP3, M4A, FLAC Lossless</strong>.
           </p>
         </div>
 
