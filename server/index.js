@@ -1,14 +1,13 @@
 import express from 'express';
 import cors from 'cors';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 import os from 'os';
-import axios from 'axios';
 
-const execPromise = promisify(exec);
+const execFilePromise = promisify(execFile);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -22,21 +21,82 @@ app.use(express.json());
 const distPath = path.join(__dirname, '../dist');
 app.use(express.static(distPath));
 
-const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
+// Resolve yt-dlp binary path
+const YTDLP_BIN = process.platform === 'win32' ? 'yt-dlp' : '/usr/local/bin/yt-dlp';
+
+// BUG 7 FIX: Startup health check - verify yt-dlp binary exists
+let ytdlpAvailable = false;
+(async () => {
+  try {
+    const { stdout } = await execFilePromise(YTDLP_BIN, ['--version'], { timeout: 5000 });
+    ytdlpAvailable = true;
+    console.log(`yt-dlp binary found: v${stdout.trim()}`);
+  } catch (e) {
+    console.error('WARNING: yt-dlp binary NOT found. Download features will fail.');
+  }
+})();
+
+// URL Sanitization helper (POTENTIAL 2 FIX: prevent command injection)
+function sanitizeUrl(url) {
+  if (!url || typeof url !== 'string') return null;
+  const trimmed = url.trim();
+  // Only allow http/https URLs
+  if (!/^https?:\/\//i.test(trimmed)) return null;
+  // Block shell metacharacters
+  if (/[`$;|&><\\]/.test(trimmed)) return null;
+  return trimmed;
+}
+
+// Temp file cleanup helper
+function cleanupTempFiles(baseName, tempDir) {
+  try {
+    const files = fs.readdirSync(tempDir).filter(f => f.startsWith(baseName));
+    files.forEach(f => {
+      try { fs.unlinkSync(path.join(tempDir, f)); } catch (e) {}
+    });
+  } catch (e) {}
+}
+
+// Find actual output file (BUG 2 FIX: yt-dlp may rename extension)
+function findOutputFile(baseName, tempDir) {
+  try {
+    const files = fs.readdirSync(tempDir).filter(f => f.startsWith(baseName));
+    if (files.length === 0) return null;
+    // Sort by modification time, newest first
+    const sorted = files
+      .map(f => ({ name: f, path: path.join(tempDir, f), mtime: fs.statSync(path.join(tempDir, f)).mtimeMs }))
+      .sort((a, b) => b.mtime - a.mtime);
+    // Return the first file that has actual content (> 0 bytes)
+    for (const file of sorted) {
+      const stat = fs.statSync(file.path);
+      if (stat.size > 0) return file;
+    }
+  } catch (e) {}
+  return null;
+}
 
 // Health Check Endpoint
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', engine: 'Native yt-dlp Temp File Engine', time: new Date().toISOString() });
+  res.json({
+    status: 'ok',
+    ytdlp: ytdlpAvailable,
+    engine: 'Native yt-dlp Temp File Engine',
+    time: new Date().toISOString()
+  });
 });
 
 // Extract Video Metadata Endpoint
 app.post('/api/info', async (req, res) => {
   const { url } = req.body;
-  if (!url || typeof url !== 'string') {
-    return res.status(400).json({ success: false, error: 'URL tidak valid atau kosong' });
+  const cleanUrl = sanitizeUrl(url);
+
+  if (!cleanUrl) {
+    return res.status(400).json({ success: false, error: 'URL tidak valid atau kosong. Pastikan URL dimulai dengan https://' });
   }
 
-  const cleanUrl = url.trim();
+  if (!ytdlpAvailable) {
+    return res.status(503).json({ success: false, error: 'Server sedang dalam proses inisialisasi. Coba lagi dalam beberapa detik.' });
+  }
 
   // Detect Platform
   let platform = 'video';
@@ -49,13 +109,23 @@ app.post('/api/info', async (req, res) => {
   let thumbnail = '';
   let duration = 'N/A';
 
-  // Extract Metadata via Native yt-dlp binary
+  // Extract Metadata via Native yt-dlp binary (using execFile instead of exec to avoid shell injection)
   try {
-    const YTDLP_BIN = process.platform === 'win32' ? 'yt-dlp' : '/usr/local/bin/yt-dlp';
-    const cmd = `${YTDLP_BIN} --dump-single-json --no-warnings --no-playlist --extractor-args "youtube:player_client=ios,android,web" --geo-bypass --no-check-certificates "${cleanUrl}"`;
-    
-    const { stdout } = await execPromise(cmd, { maxBuffer: 1024 * 1024 * 20, timeout: 15000 });
-    
+    const args = [
+      '--dump-single-json',
+      '--no-warnings',
+      '--no-playlist',
+      '--extractor-args', 'youtube:player_client=ios,android,web',
+      '--geo-bypass',
+      '--no-check-certificates',
+      cleanUrl
+    ];
+
+    const { stdout } = await execFilePromise(YTDLP_BIN, args, {
+      maxBuffer: 1024 * 1024 * 20,
+      timeout: 15000
+    });
+
     if (stdout && stdout.trim().startsWith('{')) {
       const info = JSON.parse(stdout);
       title = info.title || info.fulltitle || title;
@@ -66,23 +136,28 @@ app.post('/api/info', async (req, res) => {
       }
     }
   } catch (err) {
-    console.warn('yt-dlp metadata extraction fallback to oEmbed:', err.message);
-    
-    const videoIdMatch = cleanUrl.match(/(?:youtu\.be\/|watch\?v=)([^#\&\?]*)/);
-    if (videoIdMatch && videoIdMatch[1]) {
-      const vid = videoIdMatch[1];
-      thumbnail = `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`;
-      try {
-        const oe = await axios.get(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${vid}&format=json`, { timeout: 4000 });
-        if (oe.data) {
-          title = oe.data.title || title;
-          author = oe.data.author_name || author;
-        }
-      } catch (e) {}
+    console.warn('yt-dlp metadata extraction failed:', err.message);
+
+    // YouTube OEmbed fallback for metadata only
+    if (platform === 'youtube') {
+      const videoIdMatch = cleanUrl.match(/(?:youtu\.be\/|watch\?v=|shorts\/)([^#\&\?]*)/);
+      if (videoIdMatch && videoIdMatch[1]) {
+        const vid = videoIdMatch[1];
+        thumbnail = `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`;
+        try {
+          const { default: axios } = await import('axios');
+          const oe = await axios.get(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${vid}&format=json`, { timeout: 4000 });
+          if (oe.data) {
+            title = oe.data.title || title;
+            author = oe.data.author_name || author;
+            thumbnail = oe.data.thumbnail_url || thumbnail;
+          }
+        } catch (e) {}
+      }
     }
   }
 
-  // All formats point to our Render server download handler
+  // BUG 3 FIX: All formats correctly use format=mp4&quality=XXX
   const formats = [
     {
       id: 'yt_dlp_1080',
@@ -106,7 +181,7 @@ app.post('/api/info', async (req, res) => {
       format: 'MP4',
       type: 'video',
       size: '480p SD Stream',
-      url: `/api/download?url=${encodeURIComponent(cleanUrl)}&format=480`
+      url: `/api/download?url=${encodeURIComponent(cleanUrl)}&format=mp4&quality=480`
     },
     {
       id: 'yt_dlp_mp3',
@@ -149,61 +224,116 @@ app.post('/api/info', async (req, res) => {
   });
 });
 
-// Stream Download Endpoint using Native yt-dlp Temp File Merging Engine
+// BUG 1+2+5+6 FIX: Download using temp file with proper glob search and increased timeout
 app.get('/api/download', async (req, res) => {
   const { url, format = 'mp4', quality = '1080' } = req.query;
 
-  if (!url) {
-    return res.status(400).send('URL parameter missing');
+  const cleanUrl = sanitizeUrl(url ? decodeURIComponent(url) : '');
+  if (!cleanUrl) {
+    return res.status(400).json({ error: 'URL parameter missing atau tidak valid' });
   }
 
-  const cleanUrl = decodeURIComponent(url);
-  const ext = format.toLowerCase();
-  const safeFilename = `media_download_${Date.now()}.${ext}`;
+  if (!ytdlpAvailable) {
+    return res.status(503).send('yt-dlp engine belum siap. Coba lagi.');
+  }
 
-  const YTDLP_BIN = process.platform === 'win32' ? 'yt-dlp' : '/usr/local/bin/yt-dlp';
+  const ext = format.toLowerCase();
+  // Unique base name for temp file identification
+  const uniqueId = `ytdl_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
   const tempDir = os.tmpdir();
-  const tempFileBase = path.join(tempDir, `yt_${Date.now()}_${Math.random().toString(36).substring(7)}`);
-  const tempFilePath = `${tempFileBase}.${ext}`;
+
+  // BUG 2 FIX: Use %(ext)s so yt-dlp writes the correct extension itself
+  const outputTemplate = path.join(tempDir, `${uniqueId}.%(ext)s`);
+
+  // Build yt-dlp args array (using execFile = no shell = no injection)
+  let args = [];
+
+  if (ext === 'mp3') {
+    args = [
+      '-x',
+      '--audio-format', 'mp3',
+      '--audio-quality', '0',
+      '--extractor-args', 'youtube:player_client=ios,android,web',
+      '--geo-bypass',
+      '--no-check-certificates',
+      '--no-playlist',
+      '-o', outputTemplate,
+      cleanUrl
+    ];
+  } else if (ext === 'flac') {
+    args = [
+      '-x',
+      '--audio-format', 'flac',
+      '--extractor-args', 'youtube:player_client=ios,android,web',
+      '--geo-bypass',
+      '--no-check-certificates',
+      '--no-playlist',
+      '-o', outputTemplate,
+      cleanUrl
+    ];
+  } else if (ext === 'm4a') {
+    args = [
+      '-f', 'ba[ext=m4a]/ba',
+      '--extractor-args', 'youtube:player_client=ios,android,web',
+      '--geo-bypass',
+      '--no-check-certificates',
+      '--no-playlist',
+      '-o', outputTemplate,
+      cleanUrl
+    ];
+  } else {
+    // BUG 1 FIX: Video MP4 - download to temp file (NOT stdout pipe)
+    // Use "best" single-stream first (already muxed, no ffmpeg needed)
+    // Fallback to separate streams that ffmpeg merges into the temp file
+    args = [
+      '-f', `best[ext=mp4][height<=${quality}]/bestvideo[height<=${quality}][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best`,
+      '--merge-output-format', 'mp4',
+      '--extractor-args', 'youtube:player_client=ios,android,web',
+      '--geo-bypass',
+      '--no-check-certificates',
+      '--no-playlist',
+      '-o', outputTemplate,
+      cleanUrl
+    ];
+  }
 
   try {
-    let dlCmd = `${YTDLP_BIN} -f "best[ext=mp4]/bestvideo[height<=${quality}][ext=mp4]+bestaudio[ext=m4a]/best" --extractor-args "youtube:player_client=ios,android,web" --geo-bypass --no-check-certificates -o "${tempFilePath}" "${cleanUrl}"`;
-    
-    if (ext === 'mp3') {
-      dlCmd = `${YTDLP_BIN} -x --audio-format mp3 --audio-quality 0 --extractor-args "youtube:player_client=ios,android,web" --geo-bypass --no-check-certificates -o "${tempFilePath}" "${cleanUrl}"`;
-    } else if (ext === 'flac') {
-      dlCmd = `${YTDLP_BIN} -x --audio-format flac --extractor-args "youtube:player_client=ios,android,web" --geo-bypass --no-check-certificates -o "${tempFilePath}" "${cleanUrl}"`;
-    } else if (ext === 'm4a') {
-      dlCmd = `${YTDLP_BIN} -f "ba[ext=m4a]/ba" --extractor-args "youtube:player_client=ios,android,web" --geo-bypass --no-check-certificates -o "${tempFilePath}" "${cleanUrl}"`;
-    }
+    // BUG 5+6 FIX: Increased timeout to 180s and maxBuffer to 50MB
+    await execFilePromise(YTDLP_BIN, args, {
+      timeout: 180000,
+      maxBuffer: 1024 * 1024 * 50
+    });
 
-    // Execute yt-dlp to download & merge directly into temp file on server disk
-    await execPromise(dlCmd, { timeout: 60000 });
+    // BUG 2 FIX: Find the actual output file by glob-searching uniqueId prefix
+    const outputFile = findOutputFile(uniqueId, tempDir);
 
-    if (fs.existsSync(tempFilePath)) {
-      return res.download(tempFilePath, safeFilename, (err) => {
-        try { if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath); } catch (e) {}
+    if (outputFile && outputFile.path) {
+      const actualExt = path.extname(outputFile.name).replace('.', '') || ext;
+      const safeFilename = `media_download_${Date.now()}.${actualExt}`;
+
+      let contentType = 'video/mp4';
+      if (actualExt === 'mp3') contentType = 'audio/mpeg';
+      else if (actualExt === 'm4a') contentType = 'audio/mp4';
+      else if (actualExt === 'flac') contentType = 'audio/flac';
+      else if (actualExt === 'webm') contentType = 'video/webm';
+
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Content-Length', fs.statSync(outputFile.path).size);
+
+      return res.download(outputFile.path, safeFilename, (err) => {
+        cleanupTempFiles(uniqueId, tempDir);
       });
     }
 
-    // Check if yt-dlp created temp file with slightly different extension
-    const matchedFiles = fs.readdirSync(tempDir).filter(f => f.startsWith(path.basename(tempFileBase)));
-    if (matchedFiles.length > 0) {
-      const actualPath = path.join(tempDir, matchedFiles[0]);
-      return res.download(actualPath, safeFilename, (err) => {
-        try { if (fs.existsSync(actualPath)) fs.unlinkSync(actualPath); } catch (e) {}
-      });
-    }
+    // No file found after successful exec
+    cleanupTempFiles(uniqueId, tempDir);
+    return res.status(500).json({ error: 'yt-dlp selesai tapi file output tidak ditemukan.' });
 
   } catch (dlErr) {
-    console.error('yt-dlp temp file download error:', dlErr.message);
-    try {
-      const files = fs.readdirSync(tempDir).filter(f => f.startsWith(path.basename(tempFileBase)));
-      files.forEach(f => fs.unlinkSync(path.join(tempDir, f)));
-    } catch (e) {}
+    console.error('yt-dlp download error:', dlErr.message);
+    cleanupTempFiles(uniqueId, tempDir);
+    return res.status(500).json({ error: 'Gagal mengunduh video. Pastikan URL valid dan coba lagi.' });
   }
-
-  return res.status(500).send('Gagal memproses dan mengunduh berkas video. Silakan coba kembali.');
 });
 
 // SPA Fallback Route
@@ -212,5 +342,5 @@ app.get('*', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Render Server with Native Temp File Engine running on port ${PORT}`);
+  console.log(`Render Server with Native yt-dlp Engine running on port ${PORT}`);
 });
