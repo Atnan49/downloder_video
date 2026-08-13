@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import { exec } from 'child_process';
+import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -22,12 +22,12 @@ app.use(express.static(distPath));
 
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
 
-// Health Check
+// Health Check Endpoint
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', engine: 'yt-dlp + ffmpeg hybrid', time: new Date().toISOString() });
+  res.json({ status: 'ok', engine: 'Native yt-dlp + ffmpeg Server', time: new Date().toISOString() });
 });
 
-// Extract Video Info Endpoint
+// Extract Video Metadata Endpoint
 app.post('/api/info', async (req, res) => {
   const { url } = req.body;
   if (!url || typeof url !== 'string') {
@@ -42,229 +42,195 @@ app.post('/api/info', async (req, res) => {
   else if (cleanUrl.includes('youtube.com') || cleanUrl.includes('youtu.be')) platform = 'youtube';
   else if (cleanUrl.includes('instagram.com')) platform = 'instagram';
 
-  // Strategy 1: Fast yt-dlp with iOS/Web player_client Bypasser
+  let title = 'Media Video';
+  let author = 'Kreator Media';
+  let thumbnail = '';
+  let duration = 'N/A';
+
+  // Extract Metadata via Native yt-dlp binary first
   try {
-    const cmd = `yt-dlp --dump-json --no-warnings --extractor-args "youtube:player_client=ios,web" --geo-bypass --no-check-certificates "${cleanUrl}"`;
-    const { stdout } = await execPromise(cmd, { maxBuffer: 1024 * 1024 * 15, timeout: 12000 });
+    const YTDLP_BIN = process.platform === 'win32' ? 'yt-dlp' : '/usr/local/bin/yt-dlp';
+    const cmd = `${YTDLP_BIN} --dump-single-json --no-warnings --no-playlist --extractor-args "youtube:player_client=ios,android,web" --geo-bypass --no-check-certificates "${cleanUrl}"`;
+    
+    const { stdout } = await execPromise(cmd, { maxBuffer: 1024 * 1024 * 20, timeout: 15000 });
     
     if (stdout && stdout.trim().startsWith('{')) {
       const info = JSON.parse(stdout);
-
-      const formats = [
-        {
-          id: 'f_1080',
-          quality: '1080p Full HD Video (H.264 MP4)',
-          format: 'MP4',
-          type: 'video',
-          size: '1080p Full HD',
-          url: `/api/download?url=${encodeURIComponent(cleanUrl)}&format=mp4&quality=1080`
-        },
-        {
-          id: 'f_720',
-          quality: '720p HD Video (H.264 MP4)',
-          format: 'MP4',
-          type: 'video',
-          size: '720p HD',
-          url: `/api/download?url=${encodeURIComponent(cleanUrl)}&format=mp4&quality=720`
-        },
-        {
-          id: 'f_mp3',
-          quality: 'Audio Only (MP3 320kbps)',
-          format: 'MP3',
-          type: 'audio',
-          size: '320kbps Audio',
-          url: `/api/download?url=${encodeURIComponent(cleanUrl)}&format=mp3`
-        },
-        {
-          id: 'f_flac',
-          quality: 'Audio Only (FLAC Lossless)',
-          format: 'FLAC',
-          type: 'audio',
-          size: 'Lossless Audio',
-          url: `/api/download?url=${encodeURIComponent(cleanUrl)}&format=flac`
-        }
-      ];
-
-      return res.json({
-        success: true,
-        platform,
-        data: {
-          title: info.title || info.fulltitle || 'Media Video',
-          author: info.uploader || info.creator || info.channel || 'Kreator Media',
-          authorAvatar: info.uploader_avatar || '',
-          thumbnail: info.thumbnail || (info.thumbnails && info.thumbnails[0]?.url) || '',
-          duration: info.duration ? `${Math.floor(info.duration / 60)}m ${info.duration % 60}s` : 'N/A',
-          previewUrl: info.url || '',
-          formats
-        }
-      });
-    }
-  } catch (error) {
-    console.warn('yt-dlp extraction warning, attempting Cobalt fallback:', error.message);
-  }
-
-  // Strategy 2: Cobalt High-Speed API Fallback Engine
-  try {
-    const cobaltRes = await axios.post('https://co.wuk.sh/api/json', {
-      url: cleanUrl,
-      videoQuality: '1080',
-      youtubeVideoCodec: 'h264',
-      filenamePattern: 'nerd'
-    }, {
-      headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'User-Agent': USER_AGENT },
-      timeout: 6000
-    });
-
-    const data = cobaltRes.data;
-    if (data && (data.url || data.picker)) {
-      const mediaUrl = data.url || (data.picker && data.picker[0]?.url);
-
-      // Fetch metadata via OEmbed if YouTube
-      let title = `${platform.toUpperCase()} Video`;
-      let author = `${platform.toUpperCase()} Creator`;
-      let thumbnail = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80';
-
-      const videoIdMatch = cleanUrl.match(/(?:youtu\.be\/|watch\?v=)([^#\&\?]*)/);
-      if (videoIdMatch && videoIdMatch[1]) {
-        const vid = videoIdMatch[1];
-        thumbnail = `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`;
-        try {
-          const oe = await axios.get(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${vid}&format=json`, { timeout: 3000 });
-          if (oe.data) {
-            title = oe.data.title || title;
-            author = oe.data.author_name || author;
-          }
-        } catch (e) {}
+      title = info.title || info.fulltitle || title;
+      author = info.uploader || info.creator || info.channel || author;
+      thumbnail = info.thumbnail || (info.thumbnails && info.thumbnails[info.thumbnails.length - 1]?.url) || thumbnail;
+      if (info.duration) {
+        duration = `${Math.floor(info.duration / 60)}m ${info.duration % 60}s`;
       }
-
-      return res.json({
-        success: true,
-        platform,
-        data: {
-          title,
-          author,
-          authorAvatar: '',
-          thumbnail,
-          duration: 'N/A',
-          previewUrl: mediaUrl,
-          formats: [
-            {
-              id: 'cobalt_1080',
-              quality: '1080p Full HD Video (H.264 MP4)',
-              format: 'MP4',
-              type: 'video',
-              size: '1080p Full HD',
-              url: mediaUrl
-            },
-            {
-              id: 'cobalt_720',
-              quality: '720p HD Video (H.264 MP4)',
-              format: 'MP4',
-              type: 'video',
-              size: '720p HD',
-              url: mediaUrl
-            },
-            {
-              id: 'cobalt_mp3',
-              quality: 'Audio Only (MP3 320kbps)',
-              format: 'MP3',
-              type: 'audio',
-              size: '320kbps Audio',
-              url: mediaUrl
-            }
-          ]
-        }
-      });
     }
   } catch (err) {
-    console.warn('Cobalt fallback warning:', err.message);
+    console.warn('yt-dlp metadata extraction fallback to oEmbed:', err.message);
+    
+    // OEmbed Metadata Fallback for YouTube
+    const videoIdMatch = cleanUrl.match(/(?:youtu\.be\/|watch\?v=)([^#\&\?]*)/);
+    if (videoIdMatch && videoIdMatch[1]) {
+      const vid = videoIdMatch[1];
+      thumbnail = `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`;
+      try {
+        const oe = await axios.get(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${vid}&format=json`, { timeout: 4000 });
+        if (oe.data) {
+          title = oe.data.title || title;
+          author = oe.data.author_name || author;
+        }
+      } catch (e) {}
+    }
   }
 
-  // Strategy 3: TikWM / YouTube OEmbed Emergency Fallback
-  const videoIdMatch = cleanUrl.match(/(?:youtu\.be\/|watch\?v=)([^#\&\?]*)/);
-  if (videoIdMatch && videoIdMatch[1]) {
-    const vid = videoIdMatch[1];
-    return res.json({
-      success: true,
-      platform: 'youtube',
-      data: {
-        title: 'YouTube Video',
-        author: 'YouTube Creator',
-        authorAvatar: '',
-        thumbnail: `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`,
-        duration: 'N/A',
-        previewUrl: `https://yewtu.be/latest_version?id=${vid}&itag=22`,
-        formats: [
-          {
-            id: 'yt_emergency_1080',
-            quality: '1080p Full HD Video (H.264 MP4)',
-            format: 'MP4',
-            type: 'video',
-            size: '1080p Full HD',
-            url: `https://yewtu.be/latest_version?id=${vid}&itag=22`
-          },
-          {
-            id: 'yt_emergency_mp3',
-            quality: 'Audio Only (MP3 320kbps)',
-            format: 'MP3',
-            type: 'audio',
-            size: '320kbps Audio',
-            url: `https://yewtu.be/latest_version?id=${vid}&itag=140`
-          }
-        ]
-      }
-    });
-  }
+  // ALL Formats ALWAYS point EXCLUSIVELY to our Render server /api/download endpoint
+  const formats = [
+    {
+      id: 'yt_dlp_1080',
+      quality: '1080p Full HD Video (H.264 MP4)',
+      format: 'MP4',
+      type: 'video',
+      size: '1080p Full HD (Merged via yt-dlp + ffmpeg)',
+      url: `/api/download?url=${encodeURIComponent(cleanUrl)}&format=mp4&quality=1080`
+    },
+    {
+      id: 'yt_dlp_720',
+      quality: '720p HD Video (H.264 MP4)',
+      format: 'MP4',
+      type: 'video',
+      size: '720p HD (Merged via yt-dlp + ffmpeg)',
+      url: `/api/download?url=${encodeURIComponent(cleanUrl)}&format=mp4&quality=720`
+    },
+    {
+      id: 'yt_dlp_480',
+      quality: '480p SD Video (H.264 MP4)',
+      format: 'MP4',
+      type: 'video',
+      size: '480p SD (Merged via yt-dlp + ffmpeg)',
+      url: `/api/download?url=${encodeURIComponent(cleanUrl)}&format=mp4&quality=480`
+    },
+    {
+      id: 'yt_dlp_mp3',
+      quality: 'Audio Only (MP3 320kbps)',
+      format: 'MP3',
+      type: 'audio',
+      size: '320kbps High Quality Audio (yt-dlp + ffmpeg)',
+      url: `/api/download?url=${encodeURIComponent(cleanUrl)}&format=mp3`
+    },
+    {
+      id: 'yt_dlp_m4a',
+      quality: 'Audio Only (M4A Original)',
+      format: 'M4A',
+      type: 'audio',
+      size: 'AAC Audio Track (yt-dlp + ffmpeg)',
+      url: `/api/download?url=${encodeURIComponent(cleanUrl)}&format=m4a`
+    },
+    {
+      id: 'yt_dlp_flac',
+      quality: 'Audio Only (FLAC Lossless)',
+      format: 'FLAC',
+      type: 'audio',
+      size: 'Lossless Audio Track (yt-dlp + ffmpeg)',
+      url: `/api/download?url=${encodeURIComponent(cleanUrl)}&format=flac`
+    }
+  ];
 
-  return res.status(400).json({
-    success: false,
-    error: 'Gagal mengekstrak metadata dari video. Silakan periksa URL kembali.'
+  return res.json({
+    success: true,
+    platform,
+    data: {
+      title,
+      author,
+      authorAvatar: '',
+      thumbnail,
+      duration,
+      previewUrl: '',
+      formats
+    }
   });
 });
 
-// Stream Download Endpoint using yt-dlp & ffmpeg
+// Native Stream Download Endpoint (EXCLUSIVELY running yt-dlp + ffmpeg on Render)
 app.get('/api/download', (req, res) => {
   const { url, format = 'mp4', quality = '1080' } = req.query;
 
   if (!url) {
-    return res.status(400).send('URL missing');
+    return res.status(400).send('URL parameter missing');
   }
 
   const cleanUrl = decodeURIComponent(url);
-
-  // If already a direct HTTP media URL (e.g. Cobalt / TikWM / Invidious stream)
-  if (cleanUrl.startsWith('http') && !cleanUrl.includes('youtube.com') && !cleanUrl.includes('youtu.be') && !cleanUrl.includes('tiktok.com/@')) {
-    return res.redirect(cleanUrl);
-  }
-
   const ext = format.toLowerCase();
-  const filename = `video_download_${Date.now()}.${ext}`;
+  const filename = `media_download_${Date.now()}.${ext}`;
 
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-  
+
+  const YTDLP_BIN = process.platform === 'win32' ? 'yt-dlp' : '/usr/local/bin/yt-dlp';
+
   if (ext === 'mp3') {
     res.setHeader('Content-Type', 'audio/mpeg');
-    const cmd = `yt-dlp -x --audio-format mp3 --audio-quality 0 --extractor-args "youtube:player_client=ios,web" --geo-bypass --no-check-certificates -o - "${cleanUrl}"`;
-    const child = exec(cmd);
+    const args = [
+      '-x',
+      '--audio-format', 'mp3',
+      '--audio-quality', '0',
+      '--extractor-args', 'youtube:player_client=ios,android,web',
+      '--geo-bypass',
+      '--no-check-certificates',
+      '-o', '-',
+      cleanUrl
+    ];
+    const child = spawn(YTDLP_BIN, args);
     child.stdout.pipe(res);
+    child.stderr.on('data', (d) => console.error('yt-dlp mp3 stderr:', d.toString()));
+
   } else if (ext === 'flac') {
     res.setHeader('Content-Type', 'audio/flac');
-    const cmd = `yt-dlp -x --audio-format flac --extractor-args "youtube:player_client=ios,web" --geo-bypass --no-check-certificates -o - "${cleanUrl}"`;
-    const child = exec(cmd);
+    const args = [
+      '-x',
+      '--audio-format', 'flac',
+      '--extractor-args', 'youtube:player_client=ios,android,web',
+      '--geo-bypass',
+      '--no-check-certificates',
+      '-o', '-',
+      cleanUrl
+    ];
+    const child = spawn(YTDLP_BIN, args);
     child.stdout.pipe(res);
+    child.stderr.on('data', (d) => console.error('yt-dlp flac stderr:', d.toString()));
+
+  } else if (ext === 'm4a') {
+    res.setHeader('Content-Type', 'audio/mp4');
+    const args = [
+      '-f', 'ba[ext=m4a]/ba',
+      '--extractor-args', 'youtube:player_client=ios,android,web',
+      '--geo-bypass',
+      '--no-check-certificates',
+      '-o', '-',
+      cleanUrl
+    ];
+    const child = spawn(YTDLP_BIN, args);
+    child.stdout.pipe(res);
+
   } else {
+    // Video MP4 (1080p / 720p / 480p) via yt-dlp + ffmpeg merging into H.264 AVC + AAC MP4
     res.setHeader('Content-Type', 'video/mp4');
-    const cmd = `yt-dlp -f "bestvideo[height<=${quality}][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --recode-video mp4 --extractor-args "youtube:player_client=ios,web" --geo-bypass --no-check-certificates -o - "${cleanUrl}"`;
-    const child = exec(cmd);
+    const args = [
+      '-f', `bestvideo[height<=${quality}][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=${quality}]+bestaudio/best[ext=mp4]/best`,
+      '--recode-video', 'mp4',
+      '--extractor-args', 'youtube:player_client=ios,android,web',
+      '--geo-bypass',
+      '--no-check-certificates',
+      '-o', '-',
+      cleanUrl
+    ];
+    const child = spawn(YTDLP_BIN, args);
     child.stdout.pipe(res);
+    child.stderr.on('data', (d) => console.error('yt-dlp mp4 stderr:', d.toString()));
   }
 });
 
-// SPA Fallback Route
+// SPA Fallback Route for React App
 app.get('*', (req, res) => {
   res.sendFile(path.join(distPath, 'index.html'));
 });
 
 app.listen(PORT, () => {
-  console.log(`Server yt-dlp + Express running on port ${PORT}`);
+  console.log(`Render Server with Native yt-dlp + ffmpeg running on port ${PORT}`);
 });
