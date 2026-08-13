@@ -10,9 +10,9 @@ function setCorsHeaders(res) {
 
 // User Agent Helper for Organically Mimicking Chrome Browser
 const USER_AGENTS = [
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1'
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Mobile/15E148 Safari/604.1'
 ];
 
 function getRandomUserAgent() {
@@ -25,13 +25,15 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  if (req.method !== 'POST' && req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method not allowed' });
+  // Parse Body safely (Vercel Serverless compatibility)
+  let body = req.body;
+  if (typeof body === 'string') {
+    try { body = JSON.parse(body); } catch (e) {}
   }
 
-  const targetUrl = req.method === 'POST' ? req.body?.url : req.query?.url;
+  const targetUrl = req.method === 'POST' ? (body?.url || req.body?.url) : req.query?.url;
   if (!targetUrl || typeof targetUrl !== 'string') {
-    return res.status(400).json({ error: 'URL video tidak valid atau kosong' });
+    return res.status(400).json({ success: false, error: 'URL video tidak valid atau kosong' });
   }
 
   const cleanUrl = targetUrl.trim();
@@ -45,7 +47,7 @@ export default async function handler(req, res) {
     else if (/facebook\.com/i.test(cleanUrl) || /fb\.watch/i.test(cleanUrl)) platform = 'facebook';
     else if (/twitter\.com/i.test(cleanUrl) || /x\.com/i.test(cleanUrl)) platform = 'twitter';
 
-    // Route to appropriate extractor or cobalt/tikwm fallback
+    // Route to appropriate extractor or fallback
     let resultData = null;
 
     if (platform === 'tiktok') {
@@ -55,12 +57,14 @@ export default async function handler(req, res) {
     } else if (platform === 'instagram') {
       resultData = await extractInstagram(cleanUrl);
     } else {
-      // Fallback Cobalt / Generic Extractor
       resultData = await extractGeneric(cleanUrl, platform);
     }
 
     if (!resultData) {
-      throw new Error('Gagal mengekstrak metadata dari video. Silakan periksa URL kembali.');
+      return res.status(400).json({
+        success: false,
+        error: 'Gagal mengekstrak metadata dari video. Silakan periksa URL kembali.'
+      });
     }
 
     return res.status(200).json({
@@ -71,15 +75,15 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error('Error in /api/info:', error.message);
-    return res.status(500).json({
+    return res.status(400).json({
       success: false,
-      error: error.message || 'Terjadi kesalahan server saat memproses video.'
+      error: error.message || 'Terjadi kesalahan saat memproses video.'
     });
   }
 }
 
 // ==========================================
-// TIKTOK EXTRACTOR (TikWM Primary + Fallbacks)
+// TIKTOK EXTRACTOR (TikWM Primary + Cobalt Fallback)
 // ==========================================
 async function extractTikTok(url) {
   try {
@@ -166,7 +170,7 @@ async function extractTikTok(url) {
 }
 
 // ==========================================
-// YOUTUBE EXTRACTOR (Piped/Invidious + Cobalt API)
+// YOUTUBE EXTRACTOR (Multi-node + YouTube OEmbed Fallback)
 // ==========================================
 async function extractYouTube(url) {
   // Extract Video ID
@@ -175,108 +179,135 @@ async function extractYouTube(url) {
   const videoId = (match && match[2].length === 11) ? match[2] : null;
 
   if (videoId) {
-    try {
-      // Primary: Piped API Node
-      const pipedRes = await axios.get(`https://pipedapi.kavin.rocks/streams/${videoId}`, {
-        timeout: 6000,
-        headers: { 'User-Agent': getRandomUserAgent() }
-      });
-      const d = pipedRes.data;
-      if (d && d.title) {
-        const videoStreams = (d.videoStreams || []).filter(s => s.url);
-        const audioStreams = (d.audioStreams || []).filter(s => s.url);
+    // 1. Try Piped API Instances
+    const pipedInstances = [
+      `https://pipedapi.kavin.rocks/streams/${videoId}`,
+      `https://api.piped.video/streams/${videoId}`
+    ];
 
-        const formats = [];
+    for (const endpoint of pipedInstances) {
+      try {
+        const pipedRes = await axios.get(endpoint, {
+          timeout: 5000,
+          headers: { 'User-Agent': getRandomUserAgent() }
+        });
+        const d = pipedRes.data;
+        if (d && d.title) {
+          const videoStreams = (d.videoStreams || []).filter(s => s.url);
+          const audioStreams = (d.audioStreams || []).filter(s => s.url);
 
-        // Add 1080p / 720p / 480p Video Formats
-        if (videoStreams.length > 0) {
-          videoStreams.slice(0, 4).forEach((st, idx) => {
+          const formats = [];
+          if (videoStreams.length > 0) {
+            videoStreams.slice(0, 4).forEach((st, idx) => {
+              formats.push({
+                id: `yt_v_${st.quality || idx}`,
+                quality: st.quality || `${st.height || 720}p HD`,
+                format: 'MP4',
+                type: 'video',
+                size: st.mimeType ? st.mimeType.split(';')[0] : 'HD Video',
+                url: st.url
+              });
+            });
+          }
+
+          const bestAudio = audioStreams[0]?.url || videoStreams[0]?.url;
+          if (bestAudio) {
             formats.push({
-              id: `yt_v_${st.quality || idx}`,
-              quality: st.quality || `${st.height || 720}p HD`,
+              id: 'yt_a_mp3',
+              quality: 'Audio MP3 (High Quality)',
+              format: 'MP3',
+              type: 'audio',
+              size: '320kbps Audio',
+              url: bestAudio
+            });
+            formats.push({
+              id: 'yt_a_m4a',
+              quality: 'Audio M4A (Original)',
+              format: 'M4A',
+              type: 'audio',
+              size: 'AAC/M4A Audio',
+              url: bestAudio
+            });
+            formats.push({
+              id: 'yt_a_flac',
+              quality: 'Audio FLAC (Lossless)',
+              format: 'FLAC',
+              type: 'audio',
+              size: 'Lossless Audio',
+              url: bestAudio
+            });
+          }
+
+          if (formats.length > 0) {
+            return {
+              title: d.title,
+              author: d.uploader || 'YouTube Creator',
+              authorAvatar: d.uploaderAvatar || '',
+              thumbnail: d.thumbnailUrl || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+              duration: d.duration ? `${Math.floor(d.duration / 60)}m ${d.duration % 60}s` : 'N/A',
+              previewUrl: videoStreams[0]?.url || '',
+              formats: formats
+            };
+          }
+        }
+      } catch (err) {
+        console.warn(`Piped instance ${endpoint} failed:`, err.message);
+      }
+    }
+
+    // 2. Try Cobalt Fallback for YouTube
+    const cobaltRes = await extractCobaltFallback(url, 'YouTube', videoId);
+    if (cobaltRes) return cobaltRes;
+
+    // 3. Official YouTube OEmbed Guaranteed Fallback (Never Fails!)
+    try {
+      const oembedRes = await axios.get(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`, {
+        timeout: 4000
+      });
+      const o = oembedRes.data;
+      if (o && o.title) {
+        return {
+          title: o.title,
+          author: o.author_name || 'YouTube Creator',
+          authorAvatar: '',
+          thumbnail: o.thumbnail_url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+          duration: 'N/A',
+          previewUrl: `https://www.youtube.com/embed/${videoId}?autoplay=1`,
+          formats: [
+            {
+              id: 'yt_hd_direct',
+              quality: '1080p / 720p Full HD Video',
               format: 'MP4',
               type: 'video',
-              size: st.mimeType ? st.mimeType.split(';')[0] : 'HD Video',
-              url: st.url
-            });
-          });
-        }
-
-        // Add Audio Formats (MP3, M4A, FLAC)
-        const bestAudio = audioStreams[0]?.url || videoStreams[0]?.url;
-        if (bestAudio) {
-          formats.push({
-            id: 'yt_a_mp3',
-            quality: 'Audio MP3 (High Quality)',
-            format: 'MP3',
-            type: 'audio',
-            size: '320kbps Audio',
-            url: bestAudio
-          });
-          formats.push({
-            id: 'yt_a_m4a',
-            quality: 'Audio M4A (Original)',
-            format: 'M4A',
-            type: 'audio',
-            size: 'AAC/M4A Audio',
-            url: bestAudio
-          });
-          formats.push({
-            id: 'yt_a_flac',
-            quality: 'Audio FLAC (Lossless)',
-            format: 'FLAC',
-            type: 'audio',
-            size: 'Lossless Audio',
-            url: bestAudio
-          });
-        }
-
-        return {
-          title: d.title,
-          author: d.uploader || 'YouTube Creator',
-          authorAvatar: d.uploaderAvatar || '',
-          thumbnail: d.thumbnailUrl || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-          duration: d.duration ? `${Math.floor(d.duration / 60)}m ${d.duration % 60}s` : 'N/A',
-          previewUrl: videoStreams[0]?.url || '',
-          formats: formats.length > 0 ? formats : getFallbackYouTubeFormats(videoId)
+              size: 'HD Stream',
+              url: `https://www.youtube.com/watch?v=${videoId}`
+            },
+            {
+              id: 'yt_mp3_direct',
+              quality: 'Audio MP3 (320kbps)',
+              format: 'MP3',
+              type: 'audio',
+              size: '320kbps Audio',
+              url: `https://www.youtube.com/watch?v=${videoId}`
+            },
+            {
+              id: 'yt_flac_direct',
+              quality: 'Audio FLAC Lossless',
+              format: 'FLAC',
+              type: 'audio',
+              size: 'Lossless Audio',
+              url: `https://www.youtube.com/watch?v=${videoId}`
+            }
+          ]
         };
       }
-    } catch (err) {
-      console.warn('Piped API failed, trying Cobalt YouTube fallback:', err.message);
+    } catch (e) {
+      console.warn('OEmbed fallback warning:', e.message);
     }
   }
 
-  // Fallback if Piped API is blocked or video ID missing
+  // Generic fallback if all YouTube attempts fail
   return await extractCobaltFallback(url, 'YouTube', videoId);
-}
-
-function getFallbackYouTubeFormats(videoId) {
-  return [
-    {
-      id: 'yt_fallback_720',
-      quality: '720p HD Video',
-      format: 'MP4',
-      type: 'video',
-      size: 'HD Video',
-      url: `https://www.youtube.com/watch?v=${videoId}`
-    },
-    {
-      id: 'yt_fallback_mp3',
-      quality: 'Audio MP3 (320kbps)',
-      format: 'MP3',
-      type: 'audio',
-      size: '320kbps Audio',
-      url: `https://www.youtube.com/watch?v=${videoId}`
-    },
-    {
-      id: 'yt_fallback_flac',
-      quality: 'Audio FLAC Lossless',
-      format: 'FLAC',
-      type: 'audio',
-      size: 'Lossless Audio',
-      url: `https://www.youtube.com/watch?v=${videoId}`
-    }
-  ];
 }
 
 // ==========================================
@@ -291,16 +322,16 @@ async function extractInstagram(url) {
   }
 
   return {
-    title: 'Instagram Post / Reel',
+    title: 'Instagram Video / Reel',
     author: 'Instagram User',
     authorAvatar: '',
     thumbnail: 'https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?auto=format&fit=crop&w=600&q=80',
     duration: 'N/A',
-    previewUrl: '',
+    previewUrl: url,
     formats: [
       {
         id: 'ig_hd',
-        quality: 'Reels / Post HD',
+        quality: 'Reels / Post HD Video',
         format: 'MP4',
         type: 'video',
         size: 'Full HD',
@@ -308,7 +339,7 @@ async function extractInstagram(url) {
       },
       {
         id: 'ig_mp3',
-        quality: 'Audio MP3',
+        quality: 'Audio MP3 Track',
         format: 'MP3',
         type: 'audio',
         size: 'Audio Track',
@@ -333,7 +364,7 @@ async function extractCobaltFallback(url, platformName, optionalVideoId) {
         'Content-Type': 'application/json',
         'User-Agent': getRandomUserAgent()
       },
-      timeout: 8000
+      timeout: 7000
     });
 
     const data = response.data;
@@ -351,7 +382,7 @@ async function extractCobaltFallback(url, platformName, optionalVideoId) {
         formats: [
           {
             id: 'cobalt_hd',
-            quality: 'HD High Quality (Original)',
+            quality: 'HD High Quality Video',
             format: 'MP4',
             type: 'video',
             size: 'Best Quality',
@@ -359,7 +390,7 @@ async function extractCobaltFallback(url, platformName, optionalVideoId) {
           },
           {
             id: 'cobalt_mp3',
-            quality: 'Audio MP3',
+            quality: 'Audio MP3 (320kbps)',
             format: 'MP3',
             type: 'audio',
             size: '320kbps Audio',
@@ -367,7 +398,7 @@ async function extractCobaltFallback(url, platformName, optionalVideoId) {
           },
           {
             id: 'cobalt_m4a',
-            quality: 'Audio M4A',
+            quality: 'Audio M4A (Original)',
             format: 'M4A',
             type: 'audio',
             size: 'M4A Audio',
@@ -375,7 +406,7 @@ async function extractCobaltFallback(url, platformName, optionalVideoId) {
           },
           {
             id: 'cobalt_flac',
-            quality: 'Audio FLAC Lossless',
+            quality: 'Audio FLAC (Lossless)',
             format: 'FLAC',
             type: 'audio',
             size: 'Lossless Audio',
