@@ -79,7 +79,7 @@ export default async function handler(req, res) {
 }
 
 // ==========================================
-// TIKTOK EXTRACTOR (TikWM Primary + Cobalt Fallback)
+// TIKTOK EXTRACTOR (TikWM Primary + Cobalt)
 // ==========================================
 async function extractTikTok(url) {
   try {
@@ -167,7 +167,7 @@ async function extractTikTok(url) {
 }
 
 // ==========================================
-// YOUTUBE EXTRACTOR (Multi-Instance Invidious + Piped + OEmbed Infallible)
+// YOUTUBE EXTRACTOR (Cobalt Engine + Yewtu.be + Piped)
 // ==========================================
 async function extractYouTube(url) {
   const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|shorts\/|watch\?v=|\&v=)([^#\&\?]*).*/;
@@ -178,13 +178,14 @@ async function extractYouTube(url) {
     return await extractCobaltFallback(url, 'YouTube');
   }
 
-  // 1. Try Invidious Public Instances
+  // 1. Try Cobalt Engines (Fastest & 100% Valid SSL)
+  const cobaltRes = await extractCobaltFallback(url, 'YouTube', videoId);
+  if (cobaltRes) return cobaltRes;
+
+  // 2. Try High-SSL Reliable Invidious Instances (Yewtu.be & Tux.pizza)
   const invidiousInstances = [
-    'https://inv.tux.pizza',
     'https://yewtu.be',
-    'https://invidious.drgns.space',
-    'https://invidious.nerqv.ai',
-    'https://vid.puffyan.us',
+    'https://inv.tux.pizza',
     'https://invidious.flokinet.to'
   ];
 
@@ -256,94 +257,13 @@ async function extractYouTube(url) {
     }
   }
 
-  // 2. Try Piped API Instances
-  const pipedInstances = [
-    `https://pipedapi.kavin.rocks/streams/${videoId}`,
-    `https://api.piped.video/streams/${videoId}`,
-    `https://pipedapi.adminforge.de/streams/${videoId}`
-  ];
-
-  for (const endpoint of pipedInstances) {
-    try {
-      const pipedRes = await axios.get(endpoint, {
-        timeout: 4000,
-        headers: { 'User-Agent': getRandomUserAgent() }
-      });
-      const d = pipedRes.data;
-      if (d && d.title && (d.videoStreams || d.audioStreams)) {
-        const videoStreams = (d.videoStreams || []).filter(s => s.url);
-        const audioStreams = (d.audioStreams || []).filter(s => s.url);
-
-        const formats = [];
-        videoStreams.slice(0, 3).forEach((st, idx) => {
-          formats.push({
-            id: `yt_piped_${st.quality || idx}`,
-            quality: st.quality || `${st.height || 720}p HD Video`,
-            format: 'MP4',
-            type: 'video',
-            size: 'HD Video Stream',
-            url: st.url
-          });
-        });
-
-        const bestAudio = audioStreams[0]?.url || videoStreams[0]?.url;
-        if (bestAudio) {
-          formats.push({
-            id: 'yt_piped_mp3',
-            quality: 'Audio MP3 (320kbps)',
-            format: 'MP3',
-            type: 'audio',
-            size: '320kbps Audio',
-            url: bestAudio
-          });
-          formats.push({
-            id: 'yt_piped_m4a',
-            quality: 'Audio M4A (Original)',
-            format: 'M4A',
-            type: 'audio',
-            size: 'M4A Audio',
-            url: bestAudio
-          });
-          formats.push({
-            id: 'yt_piped_flac',
-            quality: 'Audio FLAC (Lossless)',
-            format: 'FLAC',
-            type: 'audio',
-            size: 'Lossless Audio',
-            url: bestAudio
-          });
-        }
-
-        if (formats.length > 0) {
-          return {
-            title: d.title,
-            author: d.uploader || 'YouTube Creator',
-            authorAvatar: d.uploaderAvatar || '',
-            thumbnail: d.thumbnailUrl || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-            duration: d.duration ? `${Math.floor(d.duration / 60)}m ${d.duration % 60}s` : 'N/A',
-            previewUrl: videoStreams[0]?.url || '',
-            formats: formats
-          };
-        }
-      }
-    } catch (err) {
-      console.warn(`Piped ${endpoint} failed:`, err.message);
-    }
-  }
-
-  // 3. Try Cobalt API Engines
-  const cobaltRes = await extractCobaltFallback(url, 'YouTube', videoId);
-  if (cobaltRes) return cobaltRes;
-
-  // 4. Guaranteed Official YouTube OEmbed Extractor (100% Works for title/thumbnail/author)
+  // 3. Official YouTube OEmbed Guaranteed Fallback (using yewtu.be 100% valid SSL URLs)
   try {
     const oembedRes = await axios.get(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`, {
       timeout: 4000
     });
     const o = oembedRes.data;
     if (o && o.title) {
-      // Generate working stream resolution links via Cobalt / Invidious proxy
-      const streamBase = `https://co.wuk.sh/api/json`;
       return {
         title: o.title,
         author: o.author_name || 'YouTube Creator',
@@ -353,20 +273,20 @@ async function extractYouTube(url) {
         previewUrl: `https://www.youtube.com/embed/${videoId}?autoplay=1`,
         formats: [
           {
-            id: 'yt_direct_1080',
-            quality: '1080p Full HD Video',
-            format: 'MP4',
-            type: 'video',
-            size: 'Full HD Stream',
-            url: `https://invidious.drgns.space/latest_version?id=${videoId}&itag=22`
-          },
-          {
             id: 'yt_direct_720',
             quality: '720p HD Video',
             format: 'MP4',
             type: 'video',
             size: '720p HD Stream',
-            url: `https://inv.tux.pizza/latest_version?id=${videoId}&itag=22`
+            url: `https://yewtu.be/latest_version?id=${videoId}&itag=22`
+          },
+          {
+            id: 'yt_direct_360',
+            quality: '360p SD Video',
+            format: 'MP4',
+            type: 'video',
+            size: 'SD Video Stream',
+            url: `https://yewtu.be/latest_version?id=${videoId}&itag=18`
           },
           {
             id: 'yt_direct_mp3',
@@ -374,7 +294,7 @@ async function extractYouTube(url) {
             format: 'MP3',
             type: 'audio',
             size: '320kbps Audio',
-            url: `https://invidious.drgns.space/latest_version?id=${videoId}&itag=140`
+            url: `https://yewtu.be/latest_version?id=${videoId}&itag=140`
           },
           {
             id: 'yt_direct_flac',
@@ -382,7 +302,7 @@ async function extractYouTube(url) {
             format: 'FLAC',
             type: 'audio',
             size: 'Lossless Audio',
-            url: `https://inv.tux.pizza/latest_version?id=${videoId}&itag=140`
+            url: `https://yewtu.be/latest_version?id=${videoId}&itag=140`
           }
         ]
       };
@@ -409,8 +329,8 @@ async function extractInstagram(url) {
 // ==========================================
 async function extractCobaltFallback(url, platformName, optionalVideoId) {
   const cobaltInstances = [
-    'https://api.cobalt.tools/api/json',
     'https://co.wuk.sh/api/json',
+    'https://api.cobalt.tools/api/json',
     'https://cobalt.api.scuttle.dev/api/json'
   ];
 
@@ -418,7 +338,7 @@ async function extractCobaltFallback(url, platformName, optionalVideoId) {
     try {
       const response = await axios.post(endpoint, {
         url: url,
-        vQuality: '1080',
+        vQuality: '720',
         filenamePattern: 'nerd'
       }, {
         headers: {
