@@ -78,10 +78,9 @@ export default async function handler(req, res) {
 }
 
 // ==========================================
-// TIKTOK EXTRACTOR (Parallel Race Execution)
+// TIKTOK EXTRACTOR (TikWM Primary + Cobalt H.264)
 // ==========================================
 async function extractTikTok(url) {
-  // Strategy 1: TikWM Primary
   try {
     const response = await axios.post('https://www.tikwm.com/api/', new URLSearchParams({
       url: url,
@@ -91,7 +90,7 @@ async function extractTikTok(url) {
         'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
         'User-Agent': getRandomUserAgent()
       },
-      timeout: 5000
+      timeout: 6000
     });
 
     const resData = response.data;
@@ -113,7 +112,7 @@ async function extractTikTok(url) {
             quality: 'No Watermark Full HD 1080p',
             format: 'MP4',
             type: 'video',
-            size: 'HD High Quality Stream',
+            size: 'HD H.264 Stream',
             url: playUrl
           },
           {
@@ -121,7 +120,7 @@ async function extractTikTok(url) {
             quality: 'No Watermark SD 720p',
             format: 'MP4',
             type: 'video',
-            size: 'Standard Quality Stream',
+            size: 'Standard Stream',
             url: d.play || playUrl
           },
           {
@@ -137,12 +136,12 @@ async function extractTikTok(url) {
             quality: 'Audio Only (MP3 320kbps)',
             format: 'MP3',
             type: 'audio',
-            size: '320kbps High Quality Audio',
+            size: '320kbps Audio Track',
             url: musicUrl
           },
           {
             id: 'tt_m4a',
-            quality: 'Audio Only (M4A Original)',
+            quality: 'Audio Only (M4A AAC)',
             format: 'M4A',
             type: 'audio',
             size: 'AAC Audio Track',
@@ -167,7 +166,7 @@ async function extractTikTok(url) {
 }
 
 // ==========================================
-// YOUTUBE EXTRACTOR (Parallel Race Cluster Engine)
+// YOUTUBE EXTRACTOR (Cobalt H.264 AVC + AAC Audio Engine)
 // ==========================================
 async function extractYouTube(url) {
   const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|shorts\/|watch\?v=|\&v=)([^#\&\?]*).*/;
@@ -196,10 +195,9 @@ async function extractYouTube(url) {
     console.warn('OEmbed fast fetch warning:', e.message);
   }
 
-  // 1. Parallel Race Execution across Cobalt High-Speed Cluster
+  // Parallel Race Execution using Cobalt H.264 Video + AAC Audio Remuxing
   const cobaltData = await extractCobaltParallelRace(url, 'YouTube', videoId);
   if (cobaltData) {
-    // Enrich with OEmbed Title & Thumbnail if Cobalt provided generic titles
     return {
       title: cobaltData.title !== 'YouTube Video Media' ? cobaltData.title : title,
       author: cobaltData.author !== 'YouTube Creator' ? cobaltData.author : author,
@@ -211,7 +209,7 @@ async function extractYouTube(url) {
     };
   }
 
-  // 2. High-Uptime Invidious Node Race Fallback
+  // Fallback High-Uptime Invidious Streams
   const invidiousInstances = ['https://yewtu.be', 'https://inv.tux.pizza'];
   for (const domain of invidiousInstances) {
     try {
@@ -228,10 +226,10 @@ async function extractYouTube(url) {
         formatStreams.forEach((st) => {
           formats.push({
             id: `yt_inv_${st.qualityLabel || st.quality || 'hd'}`,
-            quality: `${st.qualityLabel || st.quality || '720p'} HD Video`,
+            quality: `${st.qualityLabel || st.quality || '720p'} HD Video (MP4)`,
             format: 'MP4',
             type: 'video',
-            size: st.container ? st.container.toUpperCase() : 'MP4 Video',
+            size: st.container ? st.container.toUpperCase() : 'H.264 MP4',
             url: st.url
           });
         });
@@ -265,7 +263,7 @@ async function extractYouTube(url) {
     }
   }
 
-  // 3. Fallback High-Quality Direct Streams (Guaranteed non-null response)
+  // Direct Emergency Streams
   return {
     title,
     author,
@@ -275,27 +273,19 @@ async function extractYouTube(url) {
     previewUrl: `https://www.youtube.com/embed/${videoId}?autoplay=1`,
     formats: [
       {
-        id: 'yt_direct_1080',
-        quality: '1080p Full HD Video',
-        format: 'MP4',
-        type: 'video',
-        size: '1080p Full HD Combined Stream',
-        url: `https://yewtu.be/latest_version?id=${videoId}&itag=22`
-      },
-      {
         id: 'yt_direct_720',
-        quality: '720p HD Video',
+        quality: '720p HD Video (H.264 MP4)',
         format: 'MP4',
         type: 'video',
-        size: '720p HD Stream',
-        url: `https://yewtu.be/latest_version?id=${videoId}&itag=18`
+        size: '720p HD H.264 Stream',
+        url: `https://yewtu.be/latest_version?id=${videoId}&itag=22`
       },
       {
         id: 'yt_direct_mp3',
         quality: 'Audio MP3 (320kbps)',
         format: 'MP3',
         type: 'audio',
-        size: '320kbps High Quality Audio',
+        size: '320kbps Audio Track',
         url: `https://yewtu.be/latest_version?id=${videoId}&itag=140`
       }
     ]
@@ -310,7 +300,7 @@ async function extractInstagram(url) {
 }
 
 // ==========================================
-// PARALLEL RACE CLUSTER ENGINE (Promise.any for 99.9% Uptime & Speed)
+// PARALLEL RACE CLUSTER ENGINE (H.264 AVC Video & AAC MP3 Remuxing)
 // ==========================================
 async function extractCobaltParallelRace(url, platformName, optionalVideoId) {
   const cobaltCluster = [
@@ -319,17 +309,19 @@ async function extractCobaltParallelRace(url, platformName, optionalVideoId) {
     'https://cobalt.api.scuttle.dev/api/json'
   ];
 
-  // Helper to query one mirror
+  // Helper to query Cobalt with H.264 Video Codec & MP3 Audio Format
   const fetchFromMirror = async (endpoint, vQuality, isAudio = false) => {
     const payload = {
       url: url,
+      videoQuality: vQuality,
       vQuality: vQuality,
+      youtubeVideoCodec: 'h264', // FORCES H.264 AVC + AAC MP4 (100% Windows Media Player & Phone compatible!)
+      downloadMode: isAudio ? 'audio' : 'auto',
+      isAudioOnly: isAudio,
+      audioFormat: 'mp3',
+      aFormat: 'mp3',
       filenamePattern: 'nerd'
     };
-    if (isAudio) {
-      payload.isAudioOnly = true;
-      payload.aFormat = 'mp3';
-    }
 
     const res = await axios.post(endpoint, payload, {
       headers: {
@@ -337,7 +329,7 @@ async function extractCobaltParallelRace(url, platformName, optionalVideoId) {
         'Content-Type': 'application/json',
         'User-Agent': getRandomUserAgent()
       },
-      timeout: 4500
+      timeout: 5000
     });
 
     if (res.data && (res.data.url || res.data.picker)) {
@@ -357,7 +349,6 @@ async function extractCobaltParallelRace(url, platformName, optionalVideoId) {
       cobaltCluster.map(endpoint => fetchFromMirror(endpoint, '1080', true))
     );
 
-    // Wait for winner results
     const [videoUrl, audioUrl] = await Promise.allSettled([videoStreamPromise, audioStreamPromise]);
 
     const resolvedVideoUrl = videoUrl.status === 'fulfilled' ? videoUrl.value : null;
@@ -377,26 +368,26 @@ async function extractCobaltParallelRace(url, platformName, optionalVideoId) {
         formats: [
           {
             id: 'cobalt_race_1080',
-            quality: '1080p Full HD Video',
+            quality: '1080p Full HD Video (H.264 MP4)',
             format: 'MP4',
             type: 'video',
-            size: '1080p Full HD Combined Stream',
+            size: '1080p Full HD H.264 AVC + AAC Audio',
             url: resolvedVideoUrl || mainUrl
           },
           {
             id: 'cobalt_race_720',
-            quality: '720p HD Video',
+            quality: '720p HD Video (H.264 MP4)',
             format: 'MP4',
             type: 'video',
-            size: '720p HD Combined Stream',
+            size: '720p HD H.264 AVC + AAC Audio',
             url: resolvedVideoUrl || mainUrl
           },
           {
             id: 'cobalt_race_mp3',
-            quality: 'Audio MP3 (320kbps)',
+            quality: 'Audio MP3 (320kbps High Quality)',
             format: 'MP3',
             type: 'audio',
-            size: '320kbps High Quality Audio',
+            size: '320kbps Clean MP3 Track',
             url: resolvedAudioUrl || mainUrl
           },
           {

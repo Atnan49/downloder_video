@@ -103,21 +103,15 @@ export default function App() {
       const downloadFilename = mediaData?.title || 'video-download';
       const fileFormat = (fmt.format || 'mp4').toLowerCase();
 
-      // Trigger high-speed direct stream download or proxy
-      if (fmt.url.includes('cobalt.tools') || fmt.url.includes('co.wuk.sh') || fmt.url.includes('tiktokcdn.com')) {
-        // Direct browser stream download to prevent Vercel 4.5MB payload cuts
-        window.open(fmt.url, '_blank');
-      } else {
-        // Proxy download via /api/download
-        const proxyDownloadUrl = `/api/download?url=${encodeURIComponent(fmt.url)}&filename=${encodeURIComponent(downloadFilename)}&format=${fileFormat}`;
-        const a = document.createElement('a');
-        a.href = proxyDownloadUrl;
-        a.download = `${downloadFilename}.${fileFormat}`;
-        a.target = '_blank';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-      }
+      // Trigger stream download via direct window open or anchor tag
+      const link = document.createElement('a');
+      link.href = fmt.url;
+      link.download = `${downloadFilename.replace(/[^a-zA-Z0-9_-]/g, '_')}.${fileFormat}`;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
 
       // Save to download history
       saveToHistory({
@@ -162,7 +156,7 @@ export default function App() {
           </h1>
 
           <p className="text-sm sm:text-base text-zinc-400 max-w-xl mx-auto leading-relaxed">
-            Dukung pengunduhan dari <strong className="text-white">TikTok (No-WM)</strong>, <strong className="text-white">YouTube (1080p Full HD)</strong>, <strong className="text-white">Instagram Reels</strong>, dan audio format <strong className="text-white">MP3, M4A, FLAC Lossless</strong>.
+            Dukung pengunduhan dari <strong className="text-white">TikTok (No-WM)</strong>, <strong className="text-white">YouTube (1080p H.264 MP4)</strong>, <strong className="text-white">Instagram Reels</strong>, dan audio format <strong className="text-white">MP3, M4A, FLAC Lossless</strong>.
           </p>
         </div>
 
