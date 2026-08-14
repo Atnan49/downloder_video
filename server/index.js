@@ -205,7 +205,7 @@ setInterval(updateYtDlp, 12 * 60 * 60 * 1000);
 // ============================================================
 // HELPER: BUILD YT-DLP COMMON PROTECTION ARGS
 // ============================================================
-function buildProtectionArgs(cleanUrl, forceClient = null) {
+function buildProtectionArgs(cleanUrl, forceClient = null, disableCookies = false) {
   const args = [
     '--geo-bypass',
     '--no-check-certificates',
@@ -220,19 +220,18 @@ function buildProtectionArgs(cleanUrl, forceClient = null) {
   }
 
   // Solusi 2: Cookies
-  const cookieFile = getCookieFile();
-  if (cookieFile) {
-    args.push('--cookies', cookieFile);
+  if (!disableCookies) {
+    const cookieFile = getCookieFile();
+    if (cookieFile) {
+      args.push('--cookies', cookieFile);
+    }
   }
 
   // Solusi 7: YouTube Extractor Args & PO Token
   const isYouTube = cleanUrl.includes('youtube.com') || cleanUrl.includes('youtu.be');
   if (isYouTube) {
-    let client = forceClient;
-    if (!client) {
-      // If cookies exist, web,mweb works with bgutil-pot PO Token Provider
-      client = cookieFile ? 'web,mweb' : 'android,ios,web,mweb';
-    }
+    // ALWAYS put android & ios first for ultra-fast response (~2s)
+    const client = forceClient || 'android,ios,web,mweb';
     let ytArgs = `youtube:player_client=${client}`;
     if (YT_PO_TOKEN) {
       ytArgs += `;po_token=${YT_PO_TOKEN}`;
@@ -251,30 +250,32 @@ function buildProtectionArgs(cleanUrl, forceClient = null) {
   return args;
 }
 
-// Automatic fallback executor for YouTube bot check errors
-async function execYtDlpWithFallback(cleanUrl, baseArgs, maxBuffer = 1024 * 1024 * 50, timeout = 180000) {
+// Fast fallback executor for YouTube
+async function execYtDlpWithFallback(cleanUrl, baseArgs, maxBuffer = 1024 * 1024 * 50, perAttemptTimeout = 15000) {
   const isYouTube = cleanUrl.includes('youtube.com') || cleanUrl.includes('youtu.be');
 
-  // Attempt 1: Optimal client depending on cookie presence
+  // Attempt 1: Fast Android/iOS/Web client (takes ~2-4s)
   try {
-    const protectionArgs = buildProtectionArgs(cleanUrl);
+    const protectionArgs = buildProtectionArgs(cleanUrl, 'android,ios,web');
     const args = [...baseArgs, ...protectionArgs, cleanUrl];
-    return await execFilePromise(YTDLP_BIN, args, { maxBuffer, timeout });
+    return await execFilePromise(YTDLP_BIN, args, { maxBuffer, timeout: perAttemptTimeout });
   } catch (err1) {
-    console.warn('yt-dlp Attempt 1 failed:', err1.message);
+    console.warn('yt-dlp Attempt 1 (android,ios,web) failed:', err1.message);
 
     if (isYouTube) {
+      // Attempt 2: Try android client specifically WITHOUT cookies
       try {
-        console.log('Retrying yt-dlp with YouTube tvhtml5 client fallback...');
-        const protectionArgs2 = buildProtectionArgs(cleanUrl, 'tvhtml5');
+        console.log('Retrying yt-dlp with YouTube android client without cookies...');
+        const protectionArgs2 = buildProtectionArgs(cleanUrl, 'android', true);
         const args2 = [...baseArgs, ...protectionArgs2, cleanUrl];
-        return await execFilePromise(YTDLP_BIN, args2, { maxBuffer, timeout });
+        return await execFilePromise(YTDLP_BIN, args2, { maxBuffer, timeout: perAttemptTimeout });
       } catch (err2) {
-        console.warn('yt-dlp Attempt 2 (tvhtml5) failed:', err2.message);
-        console.log('Retrying yt-dlp with YouTube mweb client fallback...');
-        const protectionArgs3 = buildProtectionArgs(cleanUrl, 'mweb');
+        console.warn('yt-dlp Attempt 2 (android no-cookies) failed:', err2.message);
+        // Attempt 3: Try tvhtml5,mweb as last resort
+        console.log('Retrying yt-dlp with YouTube tvhtml5,mweb fallback...');
+        const protectionArgs3 = buildProtectionArgs(cleanUrl, 'tvhtml5,mweb');
         const args3 = [...baseArgs, ...protectionArgs3, cleanUrl];
-        return await execFilePromise(YTDLP_BIN, args3, { maxBuffer, timeout });
+        return await execFilePromise(YTDLP_BIN, args3, { maxBuffer, timeout: perAttemptTimeout });
       }
     }
     throw err1;
@@ -332,7 +333,7 @@ app.post('/api/info', async (req, res) => {
 
   try {
     const baseArgs = ['--dump-single-json', '--no-warnings'];
-    const { stdout } = await execYtDlpWithFallback(cleanUrl, baseArgs, 1024 * 1024 * 20, 45000);
+    const { stdout } = await execYtDlpWithFallback(cleanUrl, baseArgs, 1024 * 1024 * 20, 15000);
     if (stdout?.trim().startsWith('{')) {
       const info = JSON.parse(stdout);
       title = info.title || info.fulltitle || title;
@@ -404,7 +405,7 @@ app.get('/api/download', async (req, res) => {
   ];
 
   try {
-    await downloadQueue.push(() => execYtDlpWithFallback(cleanUrl, baseArgs, 1024 * 1024 * 50, 180000));
+    await downloadQueue.push(() => execYtDlpWithFallback(cleanUrl, baseArgs, 1024 * 1024 * 50, 45000));
 
     const outputFiles = fs.readdirSync(tmpDir)
       .filter(f => f.startsWith(uid))
