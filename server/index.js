@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import { execFile } from 'child_process';
+import { execFile, spawn } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -21,6 +21,25 @@ const distPath = path.join(__dirname, '../dist');
 app.use(express.static(distPath));
 
 const YTDLP_BIN = process.platform === 'win32' ? 'yt-dlp' : 'yt-dlp';
+
+// ============================================================
+// AUTO-START PO TOKEN PROVIDER (bgutil-pot) ON PORT 4416
+// ============================================================
+(async () => {
+  const potCandidates = ['/usr/bin/bgutil-pot', '/usr/local/bin/bgutil-pot', 'bgutil-pot'];
+  for (const binPath of potCandidates) {
+    if (binPath.startsWith('/') && fs.existsSync(binPath)) {
+      try {
+        console.log(`Starting PO Token Provider server (${binPath}) on port 4416...`);
+        const potProcess = spawn(binPath, [], { stdio: 'inherit' });
+        potProcess.on('error', (err) => console.warn('PO Token Provider process warning:', err.message));
+        break;
+      } catch (e) {
+        console.warn('Failed to start PO token provider:', e.message);
+      }
+    }
+  }
+})();
 
 // ============================================================
 // CONFIGURATION & ENVS
@@ -224,8 +243,12 @@ function buildProtectionArgs(cleanUrl, forceClient = null) {
   // Solusi 7: YouTube Extractor Args & PO Token
   const isYouTube = cleanUrl.includes('youtube.com') || cleanUrl.includes('youtu.be');
   if (isYouTube) {
-    // CRITICAL FIX: android & ios clients bypass YouTube bot checks on datacenter IPs (Render/AWS)
-    const client = forceClient || 'android,ios,tvhtml5,mweb';
+    let client = forceClient;
+    if (!client) {
+      // If cookies exist, mobile clients (android/ios) skip cookies, so use web,mweb
+      // If no cookies exist, use android,ios,web,mweb
+      client = cookieFile ? 'web,mweb,tvhtml5' : 'android,ios,web,mweb';
+    }
     let ytArgs = `youtube:player_client=${client}`;
     if (YT_PO_TOKEN) {
       ytArgs += `;po_token=${YT_PO_TOKEN}`;
@@ -248,7 +271,7 @@ function buildProtectionArgs(cleanUrl, forceClient = null) {
 async function execYtDlpWithFallback(cleanUrl, baseArgs, maxBuffer = 1024 * 1024 * 50, timeout = 180000) {
   const isYouTube = cleanUrl.includes('youtube.com') || cleanUrl.includes('youtu.be');
 
-  // Attempt 1: android,ios,tvhtml5,mweb
+  // Attempt 1: Optimal client depending on cookie presence
   try {
     const protectionArgs = buildProtectionArgs(cleanUrl);
     const args = [...baseArgs, ...protectionArgs, cleanUrl];
@@ -256,14 +279,14 @@ async function execYtDlpWithFallback(cleanUrl, baseArgs, maxBuffer = 1024 * 1024
   } catch (err1) {
     console.warn('yt-dlp Attempt 1 failed:', err1.message);
 
-    if (isYouTube && (err1.message.includes('Sign in to confirm') || err1.message.includes('429') || err1.message.includes('bot'))) {
-      console.log('Retrying yt-dlp with YouTube android client fallback...');
+    if (isYouTube) {
       try {
-        const protectionArgs2 = buildProtectionArgs(cleanUrl, 'android,ios');
+        console.log('Retrying yt-dlp with YouTube web,mweb client fallback...');
+        const protectionArgs2 = buildProtectionArgs(cleanUrl, 'web,mweb');
         const args2 = [...baseArgs, ...protectionArgs2, cleanUrl];
         return await execFilePromise(YTDLP_BIN, args2, { maxBuffer, timeout });
       } catch (err2) {
-        console.warn('yt-dlp Attempt 2 (android) failed:', err2.message);
+        console.warn('yt-dlp Attempt 2 (web) failed:', err2.message);
         console.log('Retrying yt-dlp with YouTube tvhtml5 client fallback...');
         const protectionArgs3 = buildProtectionArgs(cleanUrl, 'tvhtml5');
         const args3 = [...baseArgs, ...protectionArgs3, cleanUrl];
