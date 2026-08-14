@@ -201,16 +201,20 @@ let ytdlpVersion = 'Unknown';
 
 async function updateYtDlp() {
   try {
-    const { stdout } = await execFilePromise(YTDLP_BIN, ['--version'], { timeout: 10000 });
+    const { stdout } = await execFilePromise(YTDLP_BIN, ['--version'], { timeout: 20000 });
     ytdlpVersion = stdout.trim();
     ytdlpAvailable = true;
     console.log(`yt-dlp ready: v${ytdlpVersion}`);
-
-    execFile(YTDLP_BIN, ['-U'], (err, out) => {
-      if (!err && out) console.log(`yt-dlp update check: ${out.trim().split('\n')[0]}`);
-    });
   } catch (e) {
-    console.error('yt-dlp initialization check failed:', e.message);
+    console.warn('yt-dlp default check failed, trying fallback paths...', e.message);
+    try {
+      const { stdout } = await execFilePromise('/usr/local/bin/yt-dlp', ['--version'], { timeout: 20000 });
+      ytdlpVersion = stdout.trim();
+      ytdlpAvailable = true;
+      console.log(`yt-dlp ready at /usr/local/bin/yt-dlp: v${ytdlpVersion}`);
+    } catch (e2) {
+      console.error('yt-dlp initialization check failed:', e2.message);
+    }
   }
 }
 
