@@ -15,7 +15,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '5mb' }));
 
 const distPath = path.join(__dirname, '../dist');
 app.use(express.static(distPath));
@@ -64,7 +64,11 @@ function getNextProxy() {
 // ============================================================
 // SOLUSI 2: COOKIES VALIDATION & AUTO-DETECTION
 // ============================================================
+let cachedCookieFile = null;
+let cookieFileChecked = false;
+
 function getCookieFile() {
+  if (cookieFileChecked) return cachedCookieFile;
   const tmpEnvCookie = path.join(os.tmpdir(), 'yt_env_cookies.txt');
   
   if (process.env.YT_COOKIES_TEXT) {
@@ -98,14 +102,17 @@ function getCookieFile() {
         if (stat.size > 20) {
           const content = fs.readFileSync(file, 'utf-8');
           if (content.includes('\t') || content.includes('Netscape')) {
-            return file;
+            cachedCookieFile = file;
+            cookieFileChecked = true;
+            return cachedCookieFile;
           }
         }
       } catch (e) {}
     }
   }
 
-  return null;
+  cookieFileChecked = true;
+  return cachedCookieFile;
 }
 
 // ============================================================
@@ -136,6 +143,14 @@ function setCachedMetadata(url, data) {
 // SOLUSI 5: RATE LIMITER & CONCURRENCY QUEUE
 // ============================================================
 const ipRequestCounts = new Map();
+
+// Bersihkan memori rate limiter setiap 1 menit
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, data] of ipRequestCounts.entries()) {
+    if (now > data.resetTime) ipRequestCounts.delete(ip);
+  }
+}, 60 * 1000);
 
 function rateLimiter(req, res, next) {
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
@@ -188,6 +203,7 @@ class TaskQueue {
 }
 
 const downloadQueue = new TaskQueue(MAX_CONCURRENT);
+const infoQueue = new TaskQueue(MAX_CONCURRENT * 2);
 
 // ============================================================
 // SOLUSI 4: AUTO-UPDATE YT-DLP ON STARTUP & INTERVAL
@@ -372,7 +388,7 @@ app.post('/api/info', async (req, res) => {
   else if (cleanUrl.includes('youtube.com') || cleanUrl.includes('youtu.be')) platform = 'youtube';
   else if (cleanUrl.includes('instagram.com')) platform = 'instagram';
 
-  const extractionTask = (async () => {
+  const extractionTask = infoQueue.push(async () => {
     let title = 'Media Video';
     let author = 'Kreator Media';
     let thumbnail = '';
@@ -397,7 +413,7 @@ app.post('/api/info', async (req, res) => {
           thumbnail = `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`;
           try {
             const { default: axios } = await import('axios');
-            const oe = await axios.get(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${vid}&format=json`, { timeout: 3000 });
+            const oe = await axios.get(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${encodeURIComponent(vid)}&format=json`, { timeout: 3000 });
             if (oe.data) { title = oe.data.title || title; author = oe.data.author_name || author; }
           } catch (e) {}
         }
@@ -415,7 +431,7 @@ app.post('/api/info', async (req, res) => {
     const responseData = { platform, data: { title, author, authorAvatar: '', thumbnail, duration, previewUrl: '', formats } };
     setCachedMetadata(cleanUrl, responseData);
     return responseData;
-  })();
+  });
 
   inFlightRequests.set(cleanUrl, extractionTask);
 
@@ -432,6 +448,8 @@ app.post('/api/info', async (req, res) => {
 // ============================================================
 // DOWNLOAD ENDPOINT (/api/download) WITH QUEUE & DEDUPLICATION
 // ============================================================
+const activeDownloads = new Map();
+
 app.get('/api/download', async (req, res) => {
   const { url, format = 'mp4', quality = 'best' } = req.query;
   const cleanUrl = sanitizeUrl(url ? decodeURIComponent(url) : '');
@@ -439,90 +457,101 @@ app.get('/api/download', async (req, res) => {
   if (!ytdlpAvailable) return res.status(503).send('yt-dlp belum siap');
 
   const downloadKey = `dl_${cleanUrl}_${format}_${quality}`;
-  if (inFlightRequests.has(downloadKey)) {
-    console.log(`[DEDUPLICATE] In-flight download request detected for ${downloadKey}`);
-    try {
-      const file = await inFlightRequests.get(downloadKey);
-      res.setHeader('Content-Type', file.contentType);
-      res.setHeader('Content-Length', file.size);
-      res.setHeader('Content-Disposition', `attachment; filename="${file.safeFilename}"`);
-      return fs.createReadStream(file.full).pipe(res);
-    } catch (e) {
-      return res.status(500).send('Download gagal.');
-    }
-  }
+  let downloadSession = activeDownloads.get(downloadKey);
 
-  const ext = format.toLowerCase();
-  const uid = `dl_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-  const tmpDir = os.tmpdir();
-  const outTemplate = path.join(tmpDir, `${uid}.%(ext)s`);
+  if (!downloadSession) {
+    const ext = format.toLowerCase();
+    const uid = `dl_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    const tmpDir = os.tmpdir();
+    const outTemplate = path.join(tmpDir, `${uid}.%(ext)s`);
 
-  let formatArgs = [];
-  if (ext === 'mp3') {
-    formatArgs = ['-x', '--audio-format', 'mp3', '--audio-quality', '0'];
-  } else if (ext === 'm4a') {
-    formatArgs = ['-f', 'ba[ext=m4a]/ba/bestaudio/b'];
-  } else {
-    if (quality === 'best') {
-      formatArgs = ['-f', 'best[ext=mp4]/best/bestvideo+bestaudio/b', '--merge-output-format', 'mp4'];
+    let formatArgs = [];
+    if (ext === 'mp3') {
+      formatArgs = ['-x', '--audio-format', 'mp3', '--audio-quality', '0'];
+    } else if (ext === 'm4a') {
+      formatArgs = ['-f', 'ba[ext=m4a]/ba/bestaudio/b'];
     } else {
-      formatArgs = ['-f', `best[ext=mp4][height<=${quality}]/best[height<=${quality}]/bestvideo[height<=${quality}]+bestaudio/b`, '--merge-output-format', 'mp4'];
+      if (quality === 'best') {
+        formatArgs = ['-f', 'best[ext=mp4]/best/bestvideo+bestaudio/b', '--merge-output-format', 'mp4'];
+      } else {
+        formatArgs = ['-f', `best[ext=mp4][height<=${quality}]/best[height<=${quality}]/bestvideo[height<=${quality}]+bestaudio/b`, '--merge-output-format', 'mp4'];
+      }
     }
+
+    const baseArgs = [...formatArgs, '-o', outTemplate];
+
+    downloadSession = {
+      refCount: 0,
+      uid: uid,
+      tmpDir: tmpDir,
+      promise: null,
+      fileData: null
+    };
+    activeDownloads.set(downloadKey, downloadSession);
+
+    downloadSession.promise = (async () => {
+      // Ubah timeout dari 45000 (45 detik) menjadi 300000 (5 menit)
+      await downloadQueue.push(() => execYtDlpWithFallback(cleanUrl, baseArgs, 1024 * 1024 * 50, 300000));
+
+      // Filter .part dan .ytdl untuk memastikan file utuh
+      const outputFiles = fs.readdirSync(tmpDir)
+        .filter(f => f.startsWith(uid) && !f.endsWith('.part') && !f.endsWith('.ytdl'))
+        .map(f => ({ name: f, full: path.join(tmpDir, f), size: fs.statSync(path.join(tmpDir, f)).size }))
+        .filter(f => f.size > 0)
+        .sort((a, b) => b.size - a.size);
+
+      if (outputFiles.length === 0) {
+        throw new Error('Download selesai tapi file utuh tidak ditemukan di server.');
+      }
+
+      const file = outputFiles[0];
+      const actualExt = path.extname(file.name).replace('.', '') || ext;
+      const safeFilename = `download_${Date.now()}.${actualExt}`;
+
+      let contentType = 'video/mp4';
+      if (actualExt === 'mp3') contentType = 'audio/mpeg';
+      else if (actualExt === 'm4a') contentType = 'audio/mp4';
+      else if (actualExt === 'webm') contentType = 'video/webm';
+
+      downloadSession.fileData = { full: file.full, size: file.size, safeFilename, contentType };
+      return downloadSession.fileData;
+    })();
   }
 
-  const baseArgs = [
-    ...formatArgs,
-    '-o', outTemplate
-  ];
-
-  const downloadTask = (async () => {
-    await downloadQueue.push(() => execYtDlpWithFallback(cleanUrl, baseArgs, 1024 * 1024 * 50, 45000));
-
-    const outputFiles = fs.readdirSync(tmpDir)
-      .filter(f => f.startsWith(uid))
-      .map(f => ({ name: f, full: path.join(tmpDir, f), size: fs.statSync(path.join(tmpDir, f)).size }))
-      .filter(f => f.size > 0)
-      .sort((a, b) => b.size - a.size);
-
-    if (outputFiles.length === 0) {
-      throw new Error('Download selesai tapi file tidak ditemukan di server.');
+  // Tingkatkan ref count (Reference Counting) untuk deduplikasi yang aman
+  downloadSession.refCount++;
+  
+  let hasDecremented = false;
+  const release = () => {
+    if (hasDecremented) return;
+    hasDecremented = true;
+    downloadSession.refCount--;
+    // Jika tidak ada lagi user yang mendownload/menunggu file ini, hapus file & sesi
+    if (downloadSession.refCount <= 0) {
+      activeDownloads.delete(downloadKey);
+      cleanup(downloadSession.uid, downloadSession.tmpDir);
     }
+  };
 
-    const file = outputFiles[0];
-    const actualExt = path.extname(file.name).replace('.', '') || ext;
-    const safeFilename = `download_${Date.now()}.${actualExt}`;
-
-    let contentType = 'video/mp4';
-    if (actualExt === 'mp3') contentType = 'audio/mpeg';
-    else if (actualExt === 'm4a') contentType = 'audio/mp4';
-    else if (actualExt === 'webm') contentType = 'video/webm';
-
-    return { full: file.full, size: file.size, safeFilename, contentType, uid, tmpDir };
-  })();
-
-  inFlightRequests.set(downloadKey, downloadTask);
+  // Bersihkan referensi jika koneksi HTTP tertutup (berhasil selesai ATAU terputus/cancel)
+  res.on('close', release);
 
   try {
-    const file = await downloadTask;
-    res.setHeader('Content-Type', file.contentType);
-    res.setHeader('Content-Length', file.size);
-    res.setHeader('Content-Disposition', `attachment; filename="${file.safeFilename}"`);
-
-    const stream = fs.createReadStream(file.full);
-    stream.pipe(res);
-    stream.on('end', () => cleanup(uid, tmpDir));
-    stream.on('error', () => cleanup(uid, tmpDir));
-
+    const fileData = await downloadSession.promise;
+    if (!res.headersSent) {
+      res.setHeader('Content-Type', fileData.contentType);
+      res.setHeader('Content-Length', fileData.size);
+      res.setHeader('Content-Disposition', `attachment; filename="${fileData.safeFilename}"`);
+      const stream = fs.createReadStream(fileData.full);
+      stream.pipe(res);
+      // Event close pada res akan otomatis terpanggil setelah pipe selesai, memicu release().
+    }
   } catch (err) {
     console.error('Download error:', err.message);
-    if (err.stderr) console.error('Download STDERR:', err.stderr);
-    if (err.stdout) console.error('Download STDOUT:', err.stdout);
-    cleanup(uid, tmpDir);
     if (!res.headersSent) {
       res.status(500).send('Download gagal diselesaikan oleh server: ' + (err.message || 'Unknown error'));
     }
-  } finally {
-    inFlightRequests.delete(downloadKey);
+    // Jika terjadi error, res.status(500) akan mengakhiri koneksi dan memicu res.on('close') => release()
   }
 });
 
