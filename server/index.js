@@ -80,16 +80,16 @@ function getCookieFile() {
       return tmpEnvCookie;
     } catch (e) {}
   }
-  if (fs.existsSync(tmpEnvCookie)) return tmpEnvCookie;
+  if (fs.existsSync(tmpEnvCookie) && fs.statSync(tmpEnvCookie).size > 10) return tmpEnvCookie;
 
   if (COOKIE_PATH_ENV && fs.existsSync(COOKIE_PATH_ENV)) {
     return COOKIE_PATH_ENV;
   }
   const rootCookie = path.join(__dirname, '../cookies.txt');
-  if (fs.existsSync(rootCookie)) return rootCookie;
+  if (fs.existsSync(rootCookie) && fs.statSync(rootCookie).size > 10) return rootCookie;
 
   const serverCookie = path.join(__dirname, 'cookies.txt');
-  if (fs.existsSync(serverCookie)) return serverCookie;
+  if (fs.existsSync(serverCookie) && fs.statSync(serverCookie).size > 10) return serverCookie;
 
   return null;
 }
@@ -207,19 +207,17 @@ setInterval(updateYtDlp, 12 * 60 * 60 * 1000);
 // HELPER: BUILD YT-DLP COMMON PROTECTION ARGS
 // ============================================================
 function buildProtectionArgs(cleanUrl, forceClient = null, disableCookies = false) {
+  const debugFlags = process.env.YTDLP_DEBUG === '1' ? ['--verbose'] : [];
+
   const args = [
     '--geo-bypass',
     '--no-check-certificates',
     '--no-playlist',
-    '--retries', '2',
-    '--fragment-retries', '2',
-    '--socket-timeout', '10',
-    '--user-agent', getRandomUserAgent()
+    '--retries', '1',
+    '--socket-timeout', '8',
+    '--user-agent', getRandomUserAgent(),
+    ...debugFlags
   ];
-
-  if (process.env.YTDLP_VERBOSE === 'true') {
-    args.push('--verbose');
-  }
 
   // Solusi 1: Proxy
   const proxy = getNextProxy();
@@ -238,7 +236,6 @@ function buildProtectionArgs(cleanUrl, forceClient = null, disableCookies = fals
   // Solusi 7: YouTube Extractor Args & PO Token
   const isYouTube = cleanUrl.includes('youtube.com') || cleanUrl.includes('youtu.be');
   if (isYouTube) {
-    // If no explicit client is specified, web,mweb with cookies & PO Token works best on cloud IPs
     const client = forceClient || 'web,mweb';
     let ytArgs = `youtube:player_client=${client}`;
     if (YT_PO_TOKEN) {
@@ -258,8 +255,8 @@ function buildProtectionArgs(cleanUrl, forceClient = null, disableCookies = fals
   return args;
 }
 
-// Robust fallback executor for YouTube
-async function execYtDlpWithFallback(cleanUrl, baseArgs, maxBuffer = 1024 * 1024 * 50, perAttemptTimeout = 25000) {
+// Fast & robust fallback executor for YouTube with explicit stderr/stdout logging
+async function execYtDlpWithFallback(cleanUrl, baseArgs, maxBuffer = 1024 * 1024 * 50, perAttemptTimeout = 15000) {
   const isYouTube = cleanUrl.includes('youtube.com') || cleanUrl.includes('youtu.be');
 
   // Attempt 1: Web & Mweb client with PO Token & Cookies
@@ -268,9 +265,9 @@ async function execYtDlpWithFallback(cleanUrl, baseArgs, maxBuffer = 1024 * 1024
     const args = [...baseArgs, ...protectionArgs, cleanUrl];
     return await execFilePromise(YTDLP_BIN, args, { maxBuffer, timeout: perAttemptTimeout });
   } catch (err1) {
-    console.warn('yt-dlp Attempt 1 (web,mweb) failed:', err1.message);
-    if (err1.stdout) console.log('Attempt 1 STDOUT:', err1.stdout.substring(0, 1000));
-    if (err1.stderr) console.error('Attempt 1 STDERR:', err1.stderr.substring(0, 1000));
+    console.warn('yt-dlp attempt failed (client=web,mweb):');
+    console.warn('  stderr:', err1.stderr || '(kosong)');
+    console.warn('  stdout:', err1.stdout || '(kosong)');
 
     if (isYouTube) {
       // Attempt 2: Tvhtml5 client fallback
@@ -280,15 +277,22 @@ async function execYtDlpWithFallback(cleanUrl, baseArgs, maxBuffer = 1024 * 1024
         const args2 = [...baseArgs, ...protectionArgs2, cleanUrl];
         return await execFilePromise(YTDLP_BIN, args2, { maxBuffer, timeout: perAttemptTimeout });
       } catch (err2) {
-        console.warn('yt-dlp Attempt 2 (tvhtml5) failed:', err2.message);
-        if (err2.stdout) console.log('Attempt 2 STDOUT:', err2.stdout.substring(0, 1000));
-        if (err2.stderr) console.error('Attempt 2 STDERR:', err2.stderr.substring(0, 1000));
+        console.warn('yt-dlp attempt failed (client=tvhtml5):');
+        console.warn('  stderr:', err2.stderr || '(kosong)');
+        console.warn('  stdout:', err2.stdout || '(kosong)');
 
         // Attempt 3: Android client WITHOUT cookies
-        console.log('Retrying yt-dlp with YouTube android client without cookies...');
-        const protectionArgs3 = buildProtectionArgs(cleanUrl, 'android', true);
-        const args3 = [...baseArgs, ...protectionArgs3, cleanUrl];
-        return await execFilePromise(YTDLP_BIN, args3, { maxBuffer, timeout: perAttemptTimeout });
+        try {
+          console.log('Retrying yt-dlp with YouTube android client without cookies...');
+          const protectionArgs3 = buildProtectionArgs(cleanUrl, 'android', true);
+          const args3 = [...baseArgs, ...protectionArgs3, cleanUrl];
+          return await execFilePromise(YTDLP_BIN, args3, { maxBuffer, timeout: perAttemptTimeout });
+        } catch (err3) {
+          console.warn('yt-dlp attempt failed (client=android):');
+          console.warn('  stderr:', err3.stderr || '(kosong)');
+          console.warn('  stdout:', err3.stdout || '(kosong)');
+          throw err3;
+        }
       }
     }
     throw err1;
@@ -335,8 +339,9 @@ app.post('/api/info', async (req, res) => {
     return res.json({ success: true, fromCache: true, ...cached });
   }
 
+  // Deduplication for duplicate in-flight requests
   if (inFlightRequests.has(cleanUrl)) {
-    console.log(`[DEDUPLICATE] In-flight request detected for ${cleanUrl}, awaiting shared promise...`);
+    console.log(`[DEDUPLICATE] In-flight info request detected for ${cleanUrl}, awaiting shared promise...`);
     try {
       const data = await inFlightRequests.get(cleanUrl);
       return res.json({ success: true, fromCache: true, ...data });
@@ -358,7 +363,7 @@ app.post('/api/info', async (req, res) => {
 
     try {
       const baseArgs = ['--dump-single-json', '--no-warnings'];
-      const { stdout } = await execYtDlpWithFallback(cleanUrl, baseArgs, 1024 * 1024 * 20, 25000);
+      const { stdout } = await execYtDlpWithFallback(cleanUrl, baseArgs, 1024 * 1024 * 20, 20000);
       if (stdout?.trim().startsWith('{')) {
         const info = JSON.parse(stdout);
         title = info.title || info.fulltitle || title;
@@ -408,13 +413,27 @@ app.post('/api/info', async (req, res) => {
 });
 
 // ============================================================
-// DOWNLOAD ENDPOINT (/api/download) WITH QUEUE
+// DOWNLOAD ENDPOINT (/api/download) WITH QUEUE & DEDUPLICATION
 // ============================================================
 app.get('/api/download', async (req, res) => {
   const { url, format = 'mp4', quality = 'best' } = req.query;
   const cleanUrl = sanitizeUrl(url ? decodeURIComponent(url) : '');
   if (!cleanUrl) return res.status(400).send('URL tidak valid');
   if (!ytdlpAvailable) return res.status(503).send('yt-dlp belum siap');
+
+  const downloadKey = `dl_${cleanUrl}_${format}_${quality}`;
+  if (inFlightRequests.has(downloadKey)) {
+    console.log(`[DEDUPLICATE] In-flight download request detected for ${downloadKey}`);
+    try {
+      const file = await inFlightRequests.get(downloadKey);
+      res.setHeader('Content-Type', file.contentType);
+      res.setHeader('Content-Length', file.size);
+      res.setHeader('Content-Disposition', `attachment; filename="${file.safeFilename}"`);
+      return fs.createReadStream(file.full).pipe(res);
+    } catch (e) {
+      return res.status(500).send('Download gagal.');
+    }
+  }
 
   const ext = format.toLowerCase();
   const uid = `dl_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
@@ -439,7 +458,7 @@ app.get('/api/download', async (req, res) => {
     '-o', outTemplate
   ];
 
-  try {
+  const downloadTask = (async () => {
     await downloadQueue.push(() => execYtDlpWithFallback(cleanUrl, baseArgs, 1024 * 1024 * 50, 45000));
 
     const outputFiles = fs.readdirSync(tmpDir)
@@ -449,7 +468,7 @@ app.get('/api/download', async (req, res) => {
       .sort((a, b) => b.size - a.size);
 
     if (outputFiles.length === 0) {
-      return res.status(500).send('Download selesai tapi file tidak ditemukan di server.');
+      throw new Error('Download selesai tapi file tidak ditemukan di server.');
     }
 
     const file = outputFiles[0];
@@ -461,9 +480,16 @@ app.get('/api/download', async (req, res) => {
     else if (actualExt === 'm4a') contentType = 'audio/mp4';
     else if (actualExt === 'webm') contentType = 'video/webm';
 
-    res.setHeader('Content-Type', contentType);
+    return { full: file.full, size: file.size, safeFilename, contentType, uid, tmpDir };
+  })();
+
+  inFlightRequests.set(downloadKey, downloadTask);
+
+  try {
+    const file = await downloadTask;
+    res.setHeader('Content-Type', file.contentType);
     res.setHeader('Content-Length', file.size);
-    res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${file.safeFilename}"`);
 
     const stream = fs.createReadStream(file.full);
     stream.pipe(res);
@@ -472,10 +498,14 @@ app.get('/api/download', async (req, res) => {
 
   } catch (err) {
     console.error('Download error:', err.message);
+    if (err.stderr) console.error('Download STDERR:', err.stderr);
+    if (err.stdout) console.error('Download STDOUT:', err.stdout);
     cleanup(uid, tmpDir);
     if (!res.headersSent) {
       res.status(500).send('Download gagal diselesaikan oleh server: ' + (err.message || 'Unknown error'));
     }
+  } finally {
+    inFlightRequests.delete(downloadKey);
   }
 });
 
