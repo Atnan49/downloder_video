@@ -7,11 +7,27 @@ import { fileURLToPath } from 'url';
 import fs from 'fs';
 import os from 'os';
 
-const execFilePromise = promisify(execFile);
+// execFilePromise diganti menjadi execFileAsync manual untuk mensupport proses kill (Kasus 1)
+function execFileAsync(cmd, args, options) {
+  return new Promise((resolve, reject) => {
+    const child = execFile(cmd, args, options, (error, stdout, stderr) => {
+      if (error) {
+        error.stdout = stdout;
+        error.stderr = stderr;
+        reject(error);
+      } else {
+        resolve({ stdout, stderr });
+      }
+    });
+    if (options.onStart) options.onStart(child);
+  });
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+app.set('trust proxy', true); // KASUS 4: Support Rate Limiter di balik Cloudflare/Nginx
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
@@ -48,6 +64,13 @@ function getRandomUserAgent() {
   return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
 }
 
+// UA TETAP khusus buat dipasangkan dengan cookies. WAJIB persis sama dengan
+// browser yang dipakai buat login & export cookies.txt, biar sesi akun kelihatan
+// konsisten (satu akun = satu device) di mata sistem anti-abuse Google.
+// Ganti isinya kalau browser yang kamu pakai buat export cookies beda dari ini.
+const FIXED_UA_FOR_COOKIES = process.env.YT_COOKIE_UA ||
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36';
+
 // ============================================================
 // SOLUSI 1: PROXY ROTATION MANAGER
 // ============================================================
@@ -70,7 +93,7 @@ let cookieFileChecked = false;
 function getCookieFile() {
   if (cookieFileChecked) return cachedCookieFile;
   const tmpEnvCookie = path.join(os.tmpdir(), 'yt_env_cookies.txt');
-  
+
   if (process.env.YT_COOKIES_TEXT) {
     try {
       let raw = process.env.YT_COOKIES_TEXT.trim();
@@ -80,12 +103,12 @@ function getCookieFile() {
         raw = '# Netscape HTTP Cookie File\n' + raw;
       }
       fs.writeFileSync(tmpEnvCookie, raw);
-    } catch (e) {}
+    } catch (e) { }
   } else if (process.env.YT_COOKIES_BASE64) {
     try {
       const decoded = Buffer.from(process.env.YT_COOKIES_BASE64.trim(), 'base64').toString('utf-8');
       fs.writeFileSync(tmpEnvCookie, decoded);
-    } catch (e) {}
+    } catch (e) { }
   }
 
   const candidates = [
@@ -107,7 +130,7 @@ function getCookieFile() {
             return cachedCookieFile;
           }
         }
-      } catch (e) {}
+      } catch (e) { }
     }
   }
 
@@ -153,7 +176,7 @@ setInterval(() => {
 }, 60 * 1000);
 
 function rateLimiter(req, res, next) {
-  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
+  const ip = req.ip || 'unknown'; // KASUS 4: Menggunakan req.ip yang otomatis membaca x-forwarded-for dengan aman berkat 'trust proxy'
   const now = Date.now();
   const clientData = ipRequestCounts.get(ip) || { count: 0, resetTime: now + RATE_LIMIT_WINDOW_MS };
 
@@ -182,23 +205,62 @@ class TaskQueue {
   }
 
   push(taskFn) {
-    return new Promise((resolve, reject) => {
-      this.queue.push({ taskFn, resolve, reject });
-      this.next();
+    let _resolve, _reject;
+    const promise = new Promise((resolve, reject) => {
+      _resolve = resolve;
+      _reject = reject;
     });
+
+    const taskItem = {
+      taskFn,
+      resolve: _resolve,
+      reject: _reject,
+      abort: null
+    };
+
+    this.queue.push(taskItem);
+    this.next();
+
+    return {
+      promise,
+      abort: () => {
+        const idx = this.queue.indexOf(taskItem);
+        if (idx !== -1) {
+          this.queue.splice(idx, 1);
+          _reject(new Error('Aborted by user (in queue)'));
+        } else if (taskItem.abort) {
+          taskItem.abort();
+          _reject(new Error('Aborted by user (running)'));
+        }
+      }
+    };
   }
 
   next() {
     if (this.running >= this.concurrency || this.queue.length === 0) return;
-    const { taskFn, resolve, reject } = this.queue.shift();
+    const taskItem = this.queue.shift();
     this.running++;
-    taskFn()
-      .then(resolve)
-      .catch(reject)
-      .finally(() => {
-        this.running--;
-        this.next();
-      });
+    
+    const result = taskItem.taskFn();
+    
+    if (result && result.promise) {
+      taskItem.abort = result.abort;
+      result.promise
+        .then(taskItem.resolve)
+        .catch(taskItem.reject)
+        .finally(() => {
+          this.running--;
+          this.next();
+        });
+    } else {
+      result
+        .then(taskItem.resolve)
+        .catch(taskItem.reject)
+        .finally(() => {
+          this.running--;
+          this.next();
+        });
+    }
   }
 }
 
@@ -213,14 +275,14 @@ let ytdlpVersion = 'Unknown';
 
 async function updateYtDlp() {
   try {
-    const { stdout } = await execFilePromise(YTDLP_BIN, ['--version'], { timeout: 20000 });
+    const { stdout } = await execFileAsync(YTDLP_BIN, ['--version'], { timeout: 20000 });
     ytdlpVersion = stdout.trim();
     ytdlpAvailable = true;
     console.log(`yt-dlp ready: v${ytdlpVersion}`);
   } catch (e) {
     console.warn('yt-dlp default check failed, trying fallback paths...', e.message);
     try {
-      const { stdout } = await execFilePromise('/usr/local/bin/yt-dlp', ['--version'], { timeout: 20000 });
+      const { stdout } = await execFileAsync('/usr/local/bin/yt-dlp', ['--version'], { timeout: 20000 });
       ytdlpVersion = stdout.trim();
       ytdlpAvailable = true;
       console.log(`yt-dlp ready at /usr/local/bin/yt-dlp: v${ytdlpVersion}`);
@@ -239,6 +301,17 @@ setInterval(updateYtDlp, 12 * 60 * 60 * 1000);
 function buildProtectionArgs(cleanUrl, forceClient = null, disableCookies = false) {
   const debugFlags = process.env.YTDLP_DEBUG === '1' ? ['--verbose'] : [];
 
+  const isYouTube = cleanUrl.includes('youtube.com') || cleanUrl.includes('youtu.be');
+  const isTikTok = cleanUrl.includes('tiktok.com');
+  const isInstagram = cleanUrl.includes('instagram.com');
+
+  // Tentukan DULU apakah cookies bakal dipakai di attempt ini, SEBELUM milih UA.
+  // UA dan cookies harus konsisten - jangan sampai satu sesi akun (cookies) dipakai
+  // bareng device yang beda-beda tiap request (random UA), karena itu pola anomali
+  // klasik yang bikin akun/sesi kena flag terlepas dari IP asalnya.
+  const cookieFile = (!disableCookies && (isYouTube || isInstagram)) ? getCookieFile() : null;
+  const chosenUA = cookieFile ? FIXED_UA_FOR_COOKIES : getRandomUserAgent();
+
   const args = [
     '--geo-bypass',
     '--no-check-certificates',
@@ -246,7 +319,7 @@ function buildProtectionArgs(cleanUrl, forceClient = null, disableCookies = fals
     '--retries', '2',
     '--fragment-retries', '2',
     '--socket-timeout', '15',
-    '--user-agent', getRandomUserAgent(),
+    '--user-agent', chosenUA,
     ...debugFlags
   ];
 
@@ -256,16 +329,9 @@ function buildProtectionArgs(cleanUrl, forceClient = null, disableCookies = fals
     args.push('--proxy', proxy);
   }
 
-  const isYouTube = cleanUrl.includes('youtube.com') || cleanUrl.includes('youtu.be');
-  const isTikTok = cleanUrl.includes('tiktok.com');
-  const isInstagram = cleanUrl.includes('instagram.com');
-
   // Solusi 2: Cookies ONLY for YouTube or non-TikTok URLs
-  if (!disableCookies && (isYouTube || isInstagram)) {
-    const cookieFile = getCookieFile();
-    if (cookieFile) {
-      args.push('--cookies', cookieFile);
-    }
+  if (cookieFile) {
+    args.push('--cookies', cookieFile);
   }
 
   // Solusi 7: Platform specific extractor args & headers
@@ -290,47 +356,64 @@ function buildProtectionArgs(cleanUrl, forceClient = null, disableCookies = fals
 }
 
 // Robust fallback executor for YouTube / TikTok / Instagram
-async function execYtDlpWithFallback(cleanUrl, baseArgs, maxBuffer = 1024 * 1024 * 50, perAttemptTimeout = 20000) {
+function execYtDlpWithFallback(cleanUrl, baseArgs, maxBuffer = 1024 * 1024 * 50, perAttemptTimeout = 20000) {
   const isYouTube = cleanUrl.includes('youtube.com') || cleanUrl.includes('youtu.be');
+  let activeChild = null;
 
-  // Attempt 1: Default execution
-  try {
-    const protectionArgs = buildProtectionArgs(cleanUrl, isYouTube ? 'web,mweb' : null);
-    const args = [...baseArgs, ...protectionArgs, cleanUrl];
-    return await execFilePromise(YTDLP_BIN, args, { maxBuffer, timeout: perAttemptTimeout });
-  } catch (err1) {
-    console.warn('yt-dlp attempt 1 failed:');
-    console.warn('  stderr:', err1.stderr || '(kosong)');
-    console.warn('  stdout:', err1.stdout || '(kosong)');
+  const promise = (async () => {
+    const checkCookieError = (stderr) => {
+      if (stderr && (stderr.includes('Sign in to confirm') || stderr.includes('cookie'))) {
+        console.error('\x1b[31m%s\x1b[0m', '[URGENT/KASUS 5] Cookies YouTube Anda kadaluarsa atau diblokir! Segera perbarui file cookies.txt Anda!');
+      }
+    };
 
-    if (isYouTube) {
-      // Attempt 2: Tvhtml5 client fallback
-      try {
-        console.log('Retrying yt-dlp with YouTube tvhtml5 client fallback...');
-        const protectionArgs2 = buildProtectionArgs(cleanUrl, 'tvhtml5');
-        const args2 = [...baseArgs, ...protectionArgs2, cleanUrl];
-        return await execFilePromise(YTDLP_BIN, args2, { maxBuffer, timeout: perAttemptTimeout });
-      } catch (err2) {
-        console.warn('yt-dlp attempt 2 (tvhtml5) failed:');
-        console.warn('  stderr:', err2.stderr || '(kosong)');
-        console.warn('  stdout:', err2.stdout || '(kosong)');
+    // Attempt 1: Default execution
+    try {
+      const protectionArgs = buildProtectionArgs(cleanUrl, isYouTube ? 'web,mweb' : null);
+      const args = [...baseArgs, ...protectionArgs, cleanUrl];
+      return await execFileAsync(YTDLP_BIN, args, { maxBuffer, timeout: perAttemptTimeout, onStart: (child) => activeChild = child });
+    } catch (err1) {
+      console.warn('yt-dlp attempt 1 failed:');
+      console.warn('  stderr:', err1.stderr || '(kosong)');
+      checkCookieError(err1.stderr);
 
-        // Attempt 3: Android client WITHOUT cookies
+      if (isYouTube) {
+        // Attempt 2: Tvhtml5 client fallback
         try {
-          console.log('Retrying yt-dlp with YouTube android client without cookies...');
-          const protectionArgs3 = buildProtectionArgs(cleanUrl, 'android', true);
-          const args3 = [...baseArgs, ...protectionArgs3, cleanUrl];
-          return await execFilePromise(YTDLP_BIN, args3, { maxBuffer, timeout: perAttemptTimeout });
-        } catch (err3) {
-          console.warn('yt-dlp attempt 3 (android) failed:');
-          console.warn('  stderr:', err3.stderr || '(kosong)');
-          console.warn('  stdout:', err3.stdout || '(kosong)');
-          throw err3;
+          console.log('Retrying yt-dlp with YouTube tvhtml5 client fallback...');
+          const protectionArgs2 = buildProtectionArgs(cleanUrl, 'tvhtml5');
+          const args2 = [...baseArgs, ...protectionArgs2, cleanUrl];
+          return await execFileAsync(YTDLP_BIN, args2, { maxBuffer, timeout: perAttemptTimeout, onStart: (child) => activeChild = child });
+        } catch (err2) {
+          console.warn('yt-dlp attempt 2 (tvhtml5) failed:');
+          console.warn('  stderr:', err2.stderr || '(kosong)');
+          checkCookieError(err2.stderr);
+
+          // Attempt 3: Android client WITHOUT cookies
+          try {
+            console.log('Retrying yt-dlp with YouTube android client without cookies...');
+            const protectionArgs3 = buildProtectionArgs(cleanUrl, 'android', true);
+            const args3 = [...baseArgs, ...protectionArgs3, cleanUrl];
+            return await execFileAsync(YTDLP_BIN, args3, { maxBuffer, timeout: perAttemptTimeout, onStart: (child) => activeChild = child });
+          } catch (err3) {
+            console.warn('yt-dlp attempt 3 (android) failed:');
+            console.warn('  stderr:', err3.stderr || '(kosong)');
+            throw err3;
+          }
         }
       }
+      throw err1;
     }
-    throw err1;
-  }
+  })();
+
+  return {
+    promise,
+    abort: () => {
+      if (activeChild) {
+        try { activeChild.kill('SIGKILL'); } catch (e) {}
+      }
+    }
+  };
 }
 
 function sanitizeUrl(url) {
@@ -396,7 +479,7 @@ app.post('/api/info', async (req, res) => {
 
     try {
       const baseArgs = ['--dump-single-json', '--no-warnings'];
-      const { stdout } = await execYtDlpWithFallback(cleanUrl, baseArgs, 1024 * 1024 * 20, 20000);
+      const { stdout } = await execYtDlpWithFallback(cleanUrl, baseArgs, 1024 * 1024 * 20, 20000).promise;
       if (stdout?.trim().startsWith('{')) {
         const info = JSON.parse(stdout);
         title = info.title || info.fulltitle || title;
@@ -415,13 +498,13 @@ app.post('/api/info', async (req, res) => {
             const { default: axios } = await import('axios');
             const oe = await axios.get(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${encodeURIComponent(vid)}&format=json`, { timeout: 3000 });
             if (oe.data) { title = oe.data.title || title; author = oe.data.author_name || author; }
-          } catch (e) {}
+          } catch (e) { }
         }
       }
     }
 
     const safeTitle = encodeURIComponent(title.replace(/[^a-zA-Z0-9_\-\u00C0-\u017F ]/g, '').trim().substring(0, 50));
-    
+
     const formats = [
       { id: 'f_best', quality: 'Best Available (MP4)', format: 'MP4', type: 'video', size: 'Best Quality', url: `/api/download?url=${encodeURIComponent(cleanUrl)}&format=mp4&quality=best&title=${safeTitle}` },
       { id: 'f_720', quality: '720p HD (MP4)', format: 'MP4', type: 'video', size: '720p HD', url: `/api/download?url=${encodeURIComponent(cleanUrl)}&format=mp4&quality=720&title=${safeTitle}` },
@@ -487,13 +570,16 @@ app.get('/api/download', async (req, res) => {
       uid: uid,
       tmpDir: tmpDir,
       promise: null,
+      abort: null,
       fileData: null
     };
     activeDownloads.set(downloadKey, downloadSession);
 
+    const taskRequest = downloadQueue.push(() => execYtDlpWithFallback(cleanUrl, baseArgs, 1024 * 1024 * 50, 300000));
+    downloadSession.abort = taskRequest.abort;
+
     downloadSession.promise = (async () => {
-      // Ubah timeout dari 45000 (45 detik) menjadi 300000 (5 menit)
-      await downloadQueue.push(() => execYtDlpWithFallback(cleanUrl, baseArgs, 1024 * 1024 * 50, 300000));
+      await taskRequest.promise;
 
       // Filter .part dan .ytdl untuk memastikan file utuh
       const outputFiles = fs.readdirSync(tmpDir)
@@ -523,7 +609,7 @@ app.get('/api/download', async (req, res) => {
 
   // Tingkatkan ref count (Reference Counting) untuk deduplikasi yang aman
   downloadSession.refCount++;
-  
+
   let hasDecremented = false;
   const release = () => {
     if (hasDecremented) return;
@@ -531,6 +617,9 @@ app.get('/api/download', async (req, res) => {
     downloadSession.refCount--;
     // Jika tidak ada lagi user yang mendownload/menunggu file ini, hapus file & sesi
     if (downloadSession.refCount <= 0) {
+      if (downloadSession.abort) {
+        downloadSession.abort(); // KASUS 1: Batalkan proses yt-dlp jika masih berjalan / antre
+      }
       activeDownloads.delete(downloadKey);
       cleanup(downloadSession.uid, downloadSession.tmpDir);
     }
@@ -542,12 +631,12 @@ app.get('/api/download', async (req, res) => {
   try {
     const fileData = await downloadSession.promise;
     if (!res.headersSent) {
-      res.setHeader('Content-Type', fileData.contentType);
-      res.setHeader('Content-Length', fileData.size);
-      res.setHeader('Content-Disposition', `attachment; filename="${fileData.safeFilename}"`);
-      const stream = fs.createReadStream(fileData.full);
-      stream.pipe(res);
-      // Event close pada res akan otomatis terpanggil setelah pipe selesai, memicu release().
+      // KASUS 3: Gunakan res.download untuk otomatis menangani Range Requests (Resume/Pause)
+      res.download(fileData.full, fileData.safeFilename, (err) => {
+        if (err && err.code !== 'ECONNABORTED' && !res.headersSent) {
+          console.error('Stream error:', err.message);
+        }
+      });
     }
   } catch (err) {
     console.error('Download error:', err.message);
@@ -561,10 +650,46 @@ app.get('/api/download', async (req, res) => {
 function cleanup(uid, dir) {
   try {
     fs.readdirSync(dir).filter(f => f.startsWith(uid)).forEach(f => {
-      try { fs.unlinkSync(path.join(dir, f)); } catch (e) {}
+      try { fs.unlinkSync(path.join(dir, f)); } catch (e) { }
     });
-  } catch (e) {}
+  } catch (e) { }
 }
+
+// ============================================================
+// KASUS 2: CLEANUP RUTIN & GRACEFUL SHUTDOWN (Mencegah Disk Penuh)
+// ============================================================
+function cleanAllTmpFiles() {
+  try {
+    const dir = os.tmpdir();
+    let deletedCount = 0;
+    fs.readdirSync(dir).filter(f => f.startsWith('dl_')).forEach(f => {
+      try { 
+        fs.unlinkSync(path.join(dir, f)); 
+        deletedCount++;
+      } catch (e) {}
+    });
+    if (deletedCount > 0) {
+      console.log(`[CLEANUP] Berhasil menghapus ${deletedCount} file sampah sisa download.`);
+    }
+  } catch (e) {
+    console.error('[CLEANUP] Gagal mengakses direktori temporary:', e.message);
+  }
+}
+
+// Jalankan saat server baru menyala
+cleanAllTmpFiles();
+
+// Tangkap sinyal shutdown untuk membersihkan disk sebelum mati
+process.on('SIGINT', () => {
+  console.log('\nMematikan server...');
+  cleanAllTmpFiles();
+  process.exit(0);
+});
+process.on('SIGTERM', () => {
+  console.log('\nMematikan server...');
+  cleanAllTmpFiles();
+  process.exit(0);
+});
 
 // SPA Fallback
 app.get('*', (req, res) => {
