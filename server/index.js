@@ -240,16 +240,19 @@ function buildProtectionArgs(cleanUrl, forceClient = null, disableCookies = fals
     args.push('--proxy', proxy);
   }
 
-  // Solusi 2: Cookies
-  if (!disableCookies) {
+  const isYouTube = cleanUrl.includes('youtube.com') || cleanUrl.includes('youtu.be');
+  const isTikTok = cleanUrl.includes('tiktok.com');
+  const isInstagram = cleanUrl.includes('instagram.com');
+
+  // Solusi 2: Cookies ONLY for YouTube or non-TikTok URLs
+  if (!disableCookies && (isYouTube || isInstagram)) {
     const cookieFile = getCookieFile();
     if (cookieFile) {
       args.push('--cookies', cookieFile);
     }
   }
 
-  // Solusi 7: YouTube Extractor Args & PO Token
-  const isYouTube = cleanUrl.includes('youtube.com') || cleanUrl.includes('youtu.be');
+  // Solusi 7: Platform specific extractor args & headers
   if (isYouTube) {
     const client = forceClient || 'web,mweb';
     let ytArgs = `youtube:player_client=${client}`;
@@ -261,26 +264,26 @@ function buildProtectionArgs(cleanUrl, forceClient = null, disableCookies = fals
     }
     args.push('--extractor-args', ytArgs);
     args.push('--add-header', 'Referer:https://www.youtube.com/');
-  } else if (cleanUrl.includes('tiktok.com')) {
+  } else if (isTikTok) {
     args.push('--add-header', 'Referer:https://www.tiktok.com/');
-  } else if (cleanUrl.includes('instagram.com')) {
+  } else if (isInstagram) {
     args.push('--add-header', 'Referer:https://www.instagram.com/');
   }
 
   return args;
 }
 
-// Fast & robust fallback executor for YouTube with explicit stderr/stdout logging
+// Robust fallback executor for YouTube / TikTok / Instagram
 async function execYtDlpWithFallback(cleanUrl, baseArgs, maxBuffer = 1024 * 1024 * 50, perAttemptTimeout = 20000) {
   const isYouTube = cleanUrl.includes('youtube.com') || cleanUrl.includes('youtu.be');
 
-  // Attempt 1: Web & Mweb client with PO Token & Cookies
+  // Attempt 1: Default execution
   try {
-    const protectionArgs = buildProtectionArgs(cleanUrl, 'web,mweb');
+    const protectionArgs = buildProtectionArgs(cleanUrl, isYouTube ? 'web,mweb' : null);
     const args = [...baseArgs, ...protectionArgs, cleanUrl];
     return await execFilePromise(YTDLP_BIN, args, { maxBuffer, timeout: perAttemptTimeout });
   } catch (err1) {
-    console.warn('yt-dlp attempt failed (client=web,mweb):');
+    console.warn('yt-dlp attempt 1 failed:');
     console.warn('  stderr:', err1.stderr || '(kosong)');
     console.warn('  stdout:', err1.stdout || '(kosong)');
 
@@ -292,7 +295,7 @@ async function execYtDlpWithFallback(cleanUrl, baseArgs, maxBuffer = 1024 * 1024
         const args2 = [...baseArgs, ...protectionArgs2, cleanUrl];
         return await execFilePromise(YTDLP_BIN, args2, { maxBuffer, timeout: perAttemptTimeout });
       } catch (err2) {
-        console.warn('yt-dlp attempt failed (client=tvhtml5):');
+        console.warn('yt-dlp attempt 2 (tvhtml5) failed:');
         console.warn('  stderr:', err2.stderr || '(kosong)');
         console.warn('  stdout:', err2.stdout || '(kosong)');
 
@@ -303,7 +306,7 @@ async function execYtDlpWithFallback(cleanUrl, baseArgs, maxBuffer = 1024 * 1024
           const args3 = [...baseArgs, ...protectionArgs3, cleanUrl];
           return await execFilePromise(YTDLP_BIN, args3, { maxBuffer, timeout: perAttemptTimeout });
         } catch (err3) {
-          console.warn('yt-dlp attempt failed (client=android):');
+          console.warn('yt-dlp attempt 3 (android) failed:');
           console.warn('  stderr:', err3.stderr || '(kosong)');
           console.warn('  stdout:', err3.stdout || '(kosong)');
           throw err3;
