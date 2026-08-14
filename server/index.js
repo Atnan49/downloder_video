@@ -62,9 +62,26 @@ function getNextProxy() {
 }
 
 // ============================================================
-// SOLUSI 2: COOKIES AUTO-DETECTION
+// SOLUSI 2: COOKIES AUTO-DETECTION & ENV SUPPORT
 // ============================================================
 function getCookieFile() {
+  const tmpEnvCookie = path.join(os.tmpdir(), 'yt_env_cookies.txt');
+  
+  if (process.env.YT_COOKIES_TEXT) {
+    try {
+      fs.writeFileSync(tmpEnvCookie, process.env.YT_COOKIES_TEXT.trim());
+      return tmpEnvCookie;
+    } catch (e) {}
+  }
+  if (process.env.YT_COOKIES_BASE64) {
+    try {
+      const decoded = Buffer.from(process.env.YT_COOKIES_BASE64.trim(), 'base64').toString('utf-8');
+      fs.writeFileSync(tmpEnvCookie, decoded);
+      return tmpEnvCookie;
+    } catch (e) {}
+  }
+  if (fs.existsSync(tmpEnvCookie)) return tmpEnvCookie;
+
   if (COOKIE_PATH_ENV && fs.existsSync(COOKIE_PATH_ENV)) {
     return COOKIE_PATH_ENV;
   }
@@ -93,7 +110,6 @@ function getCachedMetadata(url) {
 }
 
 function setCachedMetadata(url, data) {
-  // Simple cache eviction if too large
   if (metadataCache.size > 500) {
     const oldestKey = metadataCache.keys().next().value;
     metadataCache.delete(oldestKey);
@@ -128,7 +144,6 @@ function rateLimiter(req, res, next) {
 
 app.use('/api/', rateLimiter);
 
-// Simple async task queue for downloads
 class TaskQueue {
   constructor(concurrency) {
     this.concurrency = concurrency;
@@ -172,7 +187,6 @@ async function updateYtDlp() {
     ytdlpAvailable = true;
     console.log(`yt-dlp ready: v${ytdlpVersion}`);
 
-    // Try auto-update in background
     execFile(YTDLP_BIN, ['-U'], (err, out) => {
       if (!err && out) console.log(`yt-dlp update check: ${out.trim().split('\n')[0]}`);
     });
@@ -181,14 +195,13 @@ async function updateYtDlp() {
   }
 }
 
-// Initial check & setup 12-hour update schedule
 updateYtDlp();
 setInterval(updateYtDlp, 12 * 60 * 60 * 1000);
 
 // ============================================================
 // HELPER: BUILD YT-DLP COMMON PROTECTION ARGS
 // ============================================================
-function buildProtectionArgs(cleanUrl) {
+function buildProtectionArgs(cleanUrl, forceClient = null) {
   const args = [
     '--geo-bypass',
     '--no-check-certificates',
@@ -211,7 +224,9 @@ function buildProtectionArgs(cleanUrl) {
   // Solusi 7: YouTube Extractor Args & PO Token
   const isYouTube = cleanUrl.includes('youtube.com') || cleanUrl.includes('youtu.be');
   if (isYouTube) {
-    let ytArgs = 'youtube:player_client=web,mweb';
+    // CRITICAL FIX: android & ios clients bypass YouTube bot checks on datacenter IPs (Render/AWS)
+    const client = forceClient || 'android,ios,tvhtml5,mweb';
+    let ytArgs = `youtube:player_client=${client}`;
     if (YT_PO_TOKEN) {
       ytArgs += `;po_token=${YT_PO_TOKEN}`;
     }
@@ -227,6 +242,36 @@ function buildProtectionArgs(cleanUrl) {
   }
 
   return args;
+}
+
+// Automatic fallback executor for YouTube bot check errors
+async function execYtDlpWithFallback(cleanUrl, baseArgs, maxBuffer = 1024 * 1024 * 50, timeout = 180000) {
+  const isYouTube = cleanUrl.includes('youtube.com') || cleanUrl.includes('youtu.be');
+
+  // Attempt 1: android,ios,tvhtml5,mweb
+  try {
+    const protectionArgs = buildProtectionArgs(cleanUrl);
+    const args = [...baseArgs, ...protectionArgs, cleanUrl];
+    return await execFilePromise(YTDLP_BIN, args, { maxBuffer, timeout });
+  } catch (err1) {
+    console.warn('yt-dlp Attempt 1 failed:', err1.message);
+
+    if (isYouTube && (err1.message.includes('Sign in to confirm') || err1.message.includes('429') || err1.message.includes('bot'))) {
+      console.log('Retrying yt-dlp with YouTube android client fallback...');
+      try {
+        const protectionArgs2 = buildProtectionArgs(cleanUrl, 'android,ios');
+        const args2 = [...baseArgs, ...protectionArgs2, cleanUrl];
+        return await execFilePromise(YTDLP_BIN, args2, { maxBuffer, timeout });
+      } catch (err2) {
+        console.warn('yt-dlp Attempt 2 (android) failed:', err2.message);
+        console.log('Retrying yt-dlp with YouTube tvhtml5 client fallback...');
+        const protectionArgs3 = buildProtectionArgs(cleanUrl, 'tvhtml5');
+        const args3 = [...baseArgs, ...protectionArgs3, cleanUrl];
+        return await execFilePromise(YTDLP_BIN, args3, { maxBuffer, timeout });
+      }
+    }
+    throw err1;
+  }
 }
 
 function sanitizeUrl(url) {
@@ -263,7 +308,6 @@ app.post('/api/info', async (req, res) => {
   if (!cleanUrl) return res.status(400).json({ success: false, error: 'URL tidak valid.' });
   if (!ytdlpAvailable) return res.status(503).json({ success: false, error: 'yt-dlp belum siap.' });
 
-  // Solusi 3: Check In-Memory Cache first
   const cached = getCachedMetadata(cleanUrl);
   if (cached) {
     return res.json({ success: true, fromCache: true, ...cached });
@@ -280,13 +324,8 @@ app.post('/api/info', async (req, res) => {
   let duration = 'N/A';
 
   try {
-    const args = [
-      '--dump-single-json',
-      '--no-warnings',
-      ...buildProtectionArgs(cleanUrl),
-      cleanUrl
-    ];
-    const { stdout } = await execFilePromise(YTDLP_BIN, args, { maxBuffer: 1024 * 1024 * 20, timeout: 25000 });
+    const baseArgs = ['--dump-single-json', '--no-warnings'];
+    const { stdout } = await execYtDlpWithFallback(cleanUrl, baseArgs, 1024 * 1024 * 20, 25000);
     if (stdout?.trim().startsWith('{')) {
       const info = JSON.parse(stdout);
       title = info.title || info.fulltitle || title;
@@ -296,7 +335,6 @@ app.post('/api/info', async (req, res) => {
     }
   } catch (err) {
     console.warn('yt-dlp metadata failed:', err.message);
-    // YouTube OEmbed fallback for metadata
     if (platform === 'youtube') {
       const m = cleanUrl.match(/(?:youtu\.be\/|watch\?v=|shorts\/)([^#&?]*)/);
       if (m?.[1]) {
@@ -321,7 +359,6 @@ app.post('/api/info', async (req, res) => {
 
   const responseData = { platform, data: { title, author, authorAvatar: '', thumbnail, duration, previewUrl: '', formats } };
   
-  // Save to Cache
   setCachedMetadata(cleanUrl, responseData);
 
   return res.json({ success: true, ...responseData });
@@ -345,25 +382,22 @@ app.get('/api/download', async (req, res) => {
   if (ext === 'mp3') {
     formatArgs = ['-x', '--audio-format', 'mp3', '--audio-quality', '0'];
   } else if (ext === 'm4a') {
-    formatArgs = ['-f', 'ba[ext=m4a]/ba'];
+    formatArgs = ['-f', 'ba[ext=m4a]/ba/bestaudio'];
   } else {
     if (quality === 'best') {
-      formatArgs = ['-f', 'best[ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best', '--merge-output-format', 'mp4'];
+      formatArgs = ['-f', 'best[ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/b/best', '--merge-output-format', 'mp4'];
     } else {
-      formatArgs = ['-f', `best[ext=mp4][height<=${quality}]/bestvideo[height<=${quality}][ext=mp4]+bestaudio[ext=m4a]/best[height<=${quality}]/best`, '--merge-output-format', 'mp4'];
+      formatArgs = ['-f', `best[ext=mp4][height<=${quality}]/bestvideo[height<=${quality}][ext=mp4]+bestaudio[ext=m4a]/b[height<=${quality}]/best[height<=${quality}]/best`, '--merge-output-format', 'mp4'];
     }
   }
 
-  const fullArgs = [
+  const baseArgs = [
     ...formatArgs,
-    ...buildProtectionArgs(cleanUrl),
-    '-o', outTemplate,
-    cleanUrl
+    '-o', outTemplate
   ];
 
-  // Solusi 5: Enqueue download task to manage concurrency
   try {
-    await downloadQueue.push(() => execFilePromise(YTDLP_BIN, fullArgs, { timeout: 180000, maxBuffer: 1024 * 1024 * 50 }));
+    await downloadQueue.push(() => execYtDlpWithFallback(cleanUrl, baseArgs, 1024 * 1024 * 50, 180000));
 
     const outputFiles = fs.readdirSync(tmpDir)
       .filter(f => f.startsWith(uid))
@@ -372,7 +406,7 @@ app.get('/api/download', async (req, res) => {
       .sort((a, b) => b.size - a.size);
 
     if (outputFiles.length === 0) {
-      return res.status(500).json({ error: 'Download selesai tapi file tidak ditemukan.' });
+      return res.status(500).send('Download selesai tapi file tidak ditemukan di server.');
     }
 
     const file = outputFiles[0];
@@ -397,7 +431,7 @@ app.get('/api/download', async (req, res) => {
     console.error('Download error:', err.message);
     cleanup(uid, tmpDir);
     if (!res.headersSent) {
-      res.status(500).json({ error: 'Download gagal: ' + (err.message || 'Unknown error') });
+      res.status(500).send('Download gagal diselesaikan oleh server: ' + (err.message || 'Unknown error'));
     }
   }
 });
