@@ -95,9 +95,10 @@ function getCookieFile() {
 }
 
 // ============================================================
-// SOLUSI 3: METADATA IN-MEMORY CACHE (1 Hour TTL)
+// SOLUSI 3: METADATA IN-MEMORY CACHE & IN-FLIGHT DEDUPLICATION
 // ============================================================
 const metadataCache = new Map();
+const inFlightRequests = new Map();
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 function getCachedMetadata(url) {
@@ -210,8 +211,15 @@ function buildProtectionArgs(cleanUrl, forceClient = null, disableCookies = fals
     '--geo-bypass',
     '--no-check-certificates',
     '--no-playlist',
+    '--retries', '1',
+    '--fragment-retries', '1',
+    '--socket-timeout', '8',
     '--user-agent', getRandomUserAgent()
   ];
+
+  if (process.env.YTDLP_VERBOSE === 'true') {
+    args.push('--verbose');
+  }
 
   // Solusi 1: Proxy
   const proxy = getNextProxy();
@@ -230,8 +238,7 @@ function buildProtectionArgs(cleanUrl, forceClient = null, disableCookies = fals
   // Solusi 7: YouTube Extractor Args & PO Token
   const isYouTube = cleanUrl.includes('youtube.com') || cleanUrl.includes('youtu.be');
   if (isYouTube) {
-    // ALWAYS put android & ios first for ultra-fast response (~2s)
-    const client = forceClient || 'android,ios,web,mweb';
+    const client = forceClient || 'android,ios,web';
     let ytArgs = `youtube:player_client=${client}`;
     if (YT_PO_TOKEN) {
       ytArgs += `;po_token=${YT_PO_TOKEN}`;
@@ -250,8 +257,8 @@ function buildProtectionArgs(cleanUrl, forceClient = null, disableCookies = fals
   return args;
 }
 
-// Fast fallback executor for YouTube
-async function execYtDlpWithFallback(cleanUrl, baseArgs, maxBuffer = 1024 * 1024 * 50, perAttemptTimeout = 15000) {
+// Fast fallback executor for YouTube with detailed error logging
+async function execYtDlpWithFallback(cleanUrl, baseArgs, maxBuffer = 1024 * 1024 * 50, perAttemptTimeout = 12000) {
   const isYouTube = cleanUrl.includes('youtube.com') || cleanUrl.includes('youtu.be');
 
   // Attempt 1: Fast Android/iOS/Web client (takes ~2-4s)
@@ -261,6 +268,8 @@ async function execYtDlpWithFallback(cleanUrl, baseArgs, maxBuffer = 1024 * 1024
     return await execFilePromise(YTDLP_BIN, args, { maxBuffer, timeout: perAttemptTimeout });
   } catch (err1) {
     console.warn('yt-dlp Attempt 1 (android,ios,web) failed:', err1.message);
+    if (err1.stdout) console.log('Attempt 1 STDOUT:', err1.stdout.substring(0, 1000));
+    if (err1.stderr) console.error('Attempt 1 STDERR:', err1.stderr.substring(0, 1000));
 
     if (isYouTube) {
       // Attempt 2: Try android client specifically WITHOUT cookies
@@ -271,9 +280,12 @@ async function execYtDlpWithFallback(cleanUrl, baseArgs, maxBuffer = 1024 * 1024
         return await execFilePromise(YTDLP_BIN, args2, { maxBuffer, timeout: perAttemptTimeout });
       } catch (err2) {
         console.warn('yt-dlp Attempt 2 (android no-cookies) failed:', err2.message);
-        // Attempt 3: Try tvhtml5,mweb as last resort
-        console.log('Retrying yt-dlp with YouTube tvhtml5,mweb fallback...');
-        const protectionArgs3 = buildProtectionArgs(cleanUrl, 'tvhtml5,mweb');
+        if (err2.stdout) console.log('Attempt 2 STDOUT:', err2.stdout.substring(0, 1000));
+        if (err2.stderr) console.error('Attempt 2 STDERR:', err2.stderr.substring(0, 1000));
+
+        // Attempt 3: Try tvhtml5 fallback
+        console.log('Retrying yt-dlp with YouTube tvhtml5 fallback...');
+        const protectionArgs3 = buildProtectionArgs(cleanUrl, 'tvhtml5');
         const args3 = [...baseArgs, ...protectionArgs3, cleanUrl];
         return await execFilePromise(YTDLP_BIN, args3, { maxBuffer, timeout: perAttemptTimeout });
       }
@@ -301,6 +313,7 @@ app.get('/api/health', (req, res) => {
     activeDownloads: downloadQueue.running,
     queuedDownloads: downloadQueue.queue.length,
     cachedItems: metadataCache.size,
+    inFlightItems: inFlightRequests.size,
     hasCookies: Boolean(getCookieFile()),
     hasProxy: Boolean(getNextProxy()),
     time: new Date().toISOString()
@@ -308,7 +321,7 @@ app.get('/api/health', (req, res) => {
 });
 
 // ============================================================
-// METADATA EXTRACTION (/api/info)
+// METADATA EXTRACTION (/api/info) WITH IN-FLIGHT DEDUPLICATION
 // ============================================================
 app.post('/api/info', async (req, res) => {
   const { url } = req.body;
@@ -321,55 +334,77 @@ app.post('/api/info', async (req, res) => {
     return res.json({ success: true, fromCache: true, ...cached });
   }
 
+  // Request deduplication for identical in-flight URL
+  if (inFlightRequests.has(cleanUrl)) {
+    console.log(`[DEDUPLICATE] In-flight request detected for ${cleanUrl}, awaiting shared promise...`);
+    try {
+      const data = await inFlightRequests.get(cleanUrl);
+      return res.json({ success: true, fromCache: true, ...data });
+    } catch (e) {
+      return res.status(500).json({ success: false, error: e.message || 'Ekstraksi gagal.' });
+    }
+  }
+
   let platform = 'video';
   if (cleanUrl.includes('tiktok.com')) platform = 'tiktok';
   else if (cleanUrl.includes('youtube.com') || cleanUrl.includes('youtu.be')) platform = 'youtube';
   else if (cleanUrl.includes('instagram.com')) platform = 'instagram';
 
-  let title = 'Media Video';
-  let author = 'Kreator Media';
-  let thumbnail = '';
-  let duration = 'N/A';
+  const extractionTask = (async () => {
+    let title = 'Media Video';
+    let author = 'Kreator Media';
+    let thumbnail = '';
+    let duration = 'N/A';
 
-  try {
-    const baseArgs = ['--dump-single-json', '--no-warnings'];
-    const { stdout } = await execYtDlpWithFallback(cleanUrl, baseArgs, 1024 * 1024 * 20, 15000);
-    if (stdout?.trim().startsWith('{')) {
-      const info = JSON.parse(stdout);
-      title = info.title || info.fulltitle || title;
-      author = info.uploader || info.creator || info.channel || author;
-      thumbnail = info.thumbnail || (info.thumbnails?.length ? info.thumbnails[info.thumbnails.length - 1]?.url : '') || thumbnail;
-      if (info.duration) duration = `${Math.floor(info.duration / 60)}m ${info.duration % 60}s`;
-    }
-  } catch (err) {
-    console.warn('yt-dlp metadata failed:', err.message);
-    if (platform === 'youtube') {
-      const m = cleanUrl.match(/(?:youtu\.be\/|watch\?v=|shorts\/)([^#&?]*)/);
-      if (m?.[1]) {
-        const vid = m[1];
-        thumbnail = `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`;
-        try {
-          const { default: axios } = await import('axios');
-          const oe = await axios.get(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${vid}&format=json`, { timeout: 3000 });
-          if (oe.data) { title = oe.data.title || title; author = oe.data.author_name || author; }
-        } catch (e) {}
+    try {
+      const baseArgs = ['--dump-single-json', '--no-warnings'];
+      const { stdout } = await execYtDlpWithFallback(cleanUrl, baseArgs, 1024 * 1024 * 20, 12000);
+      if (stdout?.trim().startsWith('{')) {
+        const info = JSON.parse(stdout);
+        title = info.title || info.fulltitle || title;
+        author = info.uploader || info.creator || info.channel || author;
+        thumbnail = info.thumbnail || (info.thumbnails?.length ? info.thumbnails[info.thumbnails.length - 1]?.url : '') || thumbnail;
+        if (info.duration) duration = `${Math.floor(info.duration / 60)}m ${info.duration % 60}s`;
+      }
+    } catch (err) {
+      console.warn('yt-dlp metadata extraction failed, checking OEmbed fallback...', err.message);
+      if (platform === 'youtube') {
+        const m = cleanUrl.match(/(?:youtu\.be\/|watch\?v=|shorts\/)([^#&?]*)/);
+        if (m?.[1]) {
+          const vid = m[1];
+          thumbnail = `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`;
+          try {
+            const { default: axios } = await import('axios');
+            const oe = await axios.get(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${vid}&format=json`, { timeout: 3000 });
+            if (oe.data) { title = oe.data.title || title; author = oe.data.author_name || author; }
+          } catch (e) {}
+        }
       }
     }
+
+    const formats = [
+      { id: 'f_best', quality: 'Best Available (MP4)', format: 'MP4', type: 'video', size: 'Best Quality', url: `/api/download?url=${encodeURIComponent(cleanUrl)}&format=mp4&quality=best` },
+      { id: 'f_720', quality: '720p HD (MP4)', format: 'MP4', type: 'video', size: '720p HD', url: `/api/download?url=${encodeURIComponent(cleanUrl)}&format=mp4&quality=720` },
+      { id: 'f_480', quality: '480p SD (MP4)', format: 'MP4', type: 'video', size: '480p SD', url: `/api/download?url=${encodeURIComponent(cleanUrl)}&format=mp4&quality=480` },
+      { id: 'f_mp3', quality: 'Audio MP3 (320kbps)', format: 'MP3', type: 'audio', size: '320kbps', url: `/api/download?url=${encodeURIComponent(cleanUrl)}&format=mp3` },
+      { id: 'f_m4a', quality: 'Audio M4A (Original)', format: 'M4A', type: 'audio', size: 'AAC Audio', url: `/api/download?url=${encodeURIComponent(cleanUrl)}&format=m4a` },
+    ];
+
+    const responseData = { platform, data: { title, author, authorAvatar: '', thumbnail, duration, previewUrl: '', formats } };
+    setCachedMetadata(cleanUrl, responseData);
+    return responseData;
+  })();
+
+  inFlightRequests.set(cleanUrl, extractionTask);
+
+  try {
+    const data = await extractionTask;
+    return res.json({ success: true, ...data });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message || 'Terjadi kesalahan ekstraksi.' });
+  } finally {
+    inFlightRequests.delete(cleanUrl);
   }
-
-  const formats = [
-    { id: 'f_best', quality: 'Best Available (MP4)', format: 'MP4', type: 'video', size: 'Best Quality', url: `/api/download?url=${encodeURIComponent(cleanUrl)}&format=mp4&quality=best` },
-    { id: 'f_720', quality: '720p HD (MP4)', format: 'MP4', type: 'video', size: '720p HD', url: `/api/download?url=${encodeURIComponent(cleanUrl)}&format=mp4&quality=720` },
-    { id: 'f_480', quality: '480p SD (MP4)', format: 'MP4', type: 'video', size: '480p SD', url: `/api/download?url=${encodeURIComponent(cleanUrl)}&format=mp4&quality=480` },
-    { id: 'f_mp3', quality: 'Audio MP3 (320kbps)', format: 'MP3', type: 'audio', size: '320kbps', url: `/api/download?url=${encodeURIComponent(cleanUrl)}&format=mp3` },
-    { id: 'f_m4a', quality: 'Audio M4A (Original)', format: 'M4A', type: 'audio', size: 'AAC Audio', url: `/api/download?url=${encodeURIComponent(cleanUrl)}&format=m4a` },
-  ];
-
-  const responseData = { platform, data: { title, author, authorAvatar: '', thumbnail, duration, previewUrl: '', formats } };
-  
-  setCachedMetadata(cleanUrl, responseData);
-
-  return res.json({ success: true, ...responseData });
 });
 
 // ============================================================
