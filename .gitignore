@@ -6,9 +6,11 @@ node_modules
 dist
 build
 
-# Environment & Vercel
+# Environment & Credentials
 .env
 .env.local
+cookies.txt
+*.cookies.txt
 .vercel
 
 # IDE & OS
