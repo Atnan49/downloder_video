@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import { execFile, spawn } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -21,25 +21,6 @@ const distPath = path.join(__dirname, '../dist');
 app.use(express.static(distPath));
 
 const YTDLP_BIN = process.platform === 'win32' ? 'yt-dlp' : 'yt-dlp';
-
-// ============================================================
-// AUTO-START PO TOKEN PROVIDER (bgutil-pot) ON PORT 4416
-// ============================================================
-(async () => {
-  const potCandidates = ['/usr/bin/bgutil-pot', '/usr/local/bin/bgutil-pot', 'bgutil-pot'];
-  for (const binPath of potCandidates) {
-    if (binPath.startsWith('/') && fs.existsSync(binPath)) {
-      try {
-        console.log(`Starting PO Token Provider server (${binPath}) on port 4416...`);
-        const potProcess = spawn(binPath, [], { stdio: 'inherit' });
-        potProcess.on('error', (err) => console.warn('PO Token Provider process warning:', err.message));
-        break;
-      } catch (e) {
-        console.warn('Failed to start PO token provider:', e.message);
-      }
-    }
-  }
-})();
 
 // ============================================================
 // CONFIGURATION & ENVS
@@ -249,9 +230,8 @@ function buildProtectionArgs(cleanUrl, forceClient = null) {
   if (isYouTube) {
     let client = forceClient;
     if (!client) {
-      // If cookies exist, mobile clients (android/ios) skip cookies, so use web,mweb
-      // If no cookies exist, use android,ios,web,mweb
-      client = cookieFile ? 'web,mweb,tvhtml5' : 'android,ios,web,mweb';
+      // If cookies exist, web,mweb works with bgutil-pot PO Token Provider
+      client = cookieFile ? 'web,mweb' : 'android,ios,web,mweb';
     }
     let ytArgs = `youtube:player_client=${client}`;
     if (YT_PO_TOKEN) {
@@ -285,14 +265,14 @@ async function execYtDlpWithFallback(cleanUrl, baseArgs, maxBuffer = 1024 * 1024
 
     if (isYouTube) {
       try {
-        console.log('Retrying yt-dlp with YouTube web,mweb client fallback...');
-        const protectionArgs2 = buildProtectionArgs(cleanUrl, 'web,mweb');
+        console.log('Retrying yt-dlp with YouTube tvhtml5 client fallback...');
+        const protectionArgs2 = buildProtectionArgs(cleanUrl, 'tvhtml5');
         const args2 = [...baseArgs, ...protectionArgs2, cleanUrl];
         return await execFilePromise(YTDLP_BIN, args2, { maxBuffer, timeout });
       } catch (err2) {
-        console.warn('yt-dlp Attempt 2 (web) failed:', err2.message);
-        console.log('Retrying yt-dlp with YouTube tvhtml5 client fallback...');
-        const protectionArgs3 = buildProtectionArgs(cleanUrl, 'tvhtml5');
+        console.warn('yt-dlp Attempt 2 (tvhtml5) failed:', err2.message);
+        console.log('Retrying yt-dlp with YouTube mweb client fallback...');
+        const protectionArgs3 = buildProtectionArgs(cleanUrl, 'mweb');
         const args3 = [...baseArgs, ...protectionArgs3, cleanUrl];
         return await execFilePromise(YTDLP_BIN, args3, { maxBuffer, timeout });
       }
@@ -352,7 +332,7 @@ app.post('/api/info', async (req, res) => {
 
   try {
     const baseArgs = ['--dump-single-json', '--no-warnings'];
-    const { stdout } = await execYtDlpWithFallback(cleanUrl, baseArgs, 1024 * 1024 * 20, 25000);
+    const { stdout } = await execYtDlpWithFallback(cleanUrl, baseArgs, 1024 * 1024 * 20, 45000);
     if (stdout?.trim().startsWith('{')) {
       const info = JSON.parse(stdout);
       title = info.title || info.fulltitle || title;

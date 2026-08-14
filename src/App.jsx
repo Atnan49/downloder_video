@@ -68,7 +68,7 @@ export default function App() {
     try {
       const response = await axios.post('/api/info', { url: targetUrl }, {
         headers: { 'Content-Type': 'application/json' },
-        timeout: 18000
+        timeout: 60000
       });
 
       if (response.data && response.data.success && response.data.data) {
