@@ -24,17 +24,17 @@ export default function HowToUseSection() {
   ];
 
   return (
-    <section className="w-full max-w-5xl mx-auto my-12 px-4 border-t border-white/10 pt-12">
+    <section className="w-full max-w-5xl mx-auto my-12 px-4 border-t border-black pt-12">
       
       {/* Title */}
       <div className="text-center space-y-2 mb-10">
-        <span className="px-3 py-1 rounded-full border border-white/20 bg-white/5 text-xs text-zinc-300 font-mono uppercase tracking-wider">
+        <span className="px-3 py-1 rounded-none border border-black bg-black/5 text-xs text-zinc-800 font-mono uppercase tracking-wider">
           PANDUAN PENGGUNAAN
         </span>
-        <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+        <h2 className="text-2xl sm:text-3xl font-extrabold text-black tracking-tight">
           Cara Mengunduh Video & Audio dalam 3 Langkah
         </h2>
-        <p className="text-sm text-zinc-400 max-w-xl mx-auto">
+        <p className="text-sm text-zinc-700 max-w-xl mx-auto">
           Proses serba cepat tanpa perlu instalasi aplikasi tambahan atau pendaftaran akun.
         </p>
       </div>
@@ -46,22 +46,22 @@ export default function HowToUseSection() {
           return (
             <div
               key={idx}
-              className="relative p-6 rounded-2xl border border-white/10 bg-white/[0.02] hover:bg-white/[0.05] transition duration-300 space-y-4 group"
+              className="relative p-6 rounded-none border-2 border-black bg-black/[0.02] hover:bg-black/[0.05] transition duration-300 space-y-4 group"
             >
               <div className="flex items-center justify-between">
-                <span className="w-10 h-10 rounded-xl bg-white text-black font-extrabold text-sm flex items-center justify-center shadow-[0_0_15px_rgba(255,255,255,0.2)]">
+                <span className="w-10 h-10 rounded-none border-2 border-black bg-black text-white font-extrabold text-sm flex items-center justify-center shadow-[0_0_15px_rgba(255,255,255,0.2)]">
                   {item.step}
                 </span>
-                <span className="p-2 rounded-lg bg-white/10 text-white">
+                <span className="p-2 rounded-none border-2 border-black bg-black/10 text-black">
                   <IconComponent className="w-4 h-4" />
                 </span>
               </div>
 
               <div>
-                <h3 className="font-bold text-white text-lg group-hover:text-white transition">
+                <h3 className="font-bold text-black text-lg group-hover:text-black transition">
                   {item.title}
                 </h3>
-                <p className="text-xs text-zinc-400 mt-2 leading-relaxed">
+                <p className="text-xs text-zinc-700 mt-2 leading-relaxed">
                   {item.desc}
                 </p>
               </div>

@@ -32,17 +32,17 @@ export default function SeoFaqSection() {
   };
 
   return (
-    <section className="w-full max-w-4xl mx-auto my-12 px-4 border-t border-white/10 pt-12">
+    <section className="w-full max-w-4xl mx-auto my-12 px-4 border-t border-black pt-12">
       
       {/* Header */}
       <div className="text-center space-y-2 mb-10">
-        <span className="px-3 py-1 rounded-full border border-white/20 bg-white/5 text-xs text-zinc-300 font-mono uppercase tracking-wider">
+        <span className="px-3 py-1 rounded-none border border-black bg-black/5 text-xs text-zinc-800 font-mono uppercase tracking-wider">
           PERTANYAAN UMUM
         </span>
-        <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+        <h2 className="text-2xl sm:text-3xl font-extrabold text-black tracking-tight">
           Pertanyaan yang Sering Diajukan (FAQ)
         </h2>
-        <p className="text-sm text-zinc-400 max-w-xl mx-auto">
+        <p className="text-sm text-zinc-700 max-w-xl mx-auto">
           Temukan jawaban atas pertanyaan paling umum seputar layanan pengunduh video & audio.
         </p>
       </div>
@@ -54,23 +54,23 @@ export default function SeoFaqSection() {
           return (
             <div
               key={idx}
-              className="rounded-2xl border border-white/10 bg-white/[0.02] overflow-hidden transition duration-300"
+              className="rounded-none border-2 border-black bg-black/[0.02] overflow-hidden transition duration-300"
             >
               <button
                 onClick={() => toggleFaq(idx)}
-                className="w-full p-5 text-left flex items-center justify-between gap-4 font-bold text-white text-sm sm:text-base hover:bg-white/[0.04] transition"
+                className="w-full p-5 text-left flex items-center justify-between gap-4 font-bold text-black text-sm sm:text-base hover:bg-black/[0.04] transition"
               >
                 <div className="flex items-center gap-3">
-                  <HelpCircle className="w-4 h-4 text-zinc-400 flex-shrink-0" />
+                  <HelpCircle className="w-4 h-4 text-zinc-700 flex-shrink-0" />
                   <span>{faq.q}</span>
                 </div>
-                <ChevronDown className={`w-4 h-4 text-zinc-400 transition-transform duration-300 flex-shrink-0 ${
-                  isOpen ? 'rotate-180 text-white' : ''
+                <ChevronDown className={`w-4 h-4 text-zinc-700 transition-transform duration-300 flex-shrink-0 ${
+                  isOpen ? 'rotate-180 text-black' : ''
                 }`} />
               </button>
 
               {isOpen && (
-                <div className="px-5 pb-5 pt-1 text-xs sm:text-sm text-zinc-400 leading-relaxed border-t border-white/5 bg-black/40 animate-fade-in">
+                <div className="px-5 pb-5 pt-1 text-xs sm:text-sm text-zinc-700 leading-relaxed border-t border-black bg-black/40 animate-fade-in">
                   {faq.a}
                 </div>
               )}

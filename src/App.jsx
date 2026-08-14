@@ -134,10 +134,9 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col justify-between selection:bg-white selection:text-black">
+    <div className="min-h-screen bg-white text-black flex flex-col justify-between selection:bg-black selection:text-white">
       
-      {/* Background Glow */}
-      <div className="glow-background"></div>
+      {/* Background Glow removed for brutalist design */}
 
       {/* Navbar */}
       <Navbar
@@ -150,13 +149,13 @@ export default function App() {
         
         {/* Hero Section */}
         <div className="text-center space-y-4 max-w-3xl mx-auto pt-2">
-          <h1 className="text-3xl sm:text-5xl md:text-6xl font-extrabold tracking-tight title-gradient leading-[1.1]">
+          <h1 className="text-3xl sm:text-5xl md:text-6xl font-extrabold tracking-tight text-black leading-[1.1] uppercase">
             Unduh Video & Audio HD <br className="hidden sm:inline" />
             Tanpa Watermark & Gratis
           </h1>
 
-          <p className="text-sm sm:text-base text-zinc-400 max-w-xl mx-auto leading-relaxed">
-            Dukung pengunduhan dari <strong className="text-white">TikTok (No-WM)</strong>, <strong className="text-white">YouTube (1080p H.264 MP4)</strong>, <strong className="text-white">Instagram Reels</strong>, dan audio format <strong className="text-white">MP3, M4A, FLAC Lossless</strong>.
+          <p className="text-sm sm:text-base text-zinc-700 max-w-xl mx-auto leading-relaxed">
+            Dukung pengunduhan dari <strong className="text-black">TikTok (No-WM)</strong>, <strong className="text-black">YouTube (1080p H.264 MP4)</strong>, <strong className="text-black">Instagram Reels</strong>, dan audio format <strong className="text-black">MP3, M4A, FLAC Lossless</strong>.
           </p>
         </div>
 
@@ -171,10 +170,10 @@ export default function App() {
         {/* Error Alert Message */}
         {errorMessage && (
           <div className="w-full max-w-3xl mx-auto px-4">
-            <div className="p-4 rounded-xl border border-white/20 bg-white/[0.04] text-xs sm:text-sm text-zinc-300 flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-white flex-shrink-0 mt-0.5" />
+            <div className="p-4 rounded-none border-2 border-black bg-black/[0.04] text-xs sm:text-sm text-zinc-800 flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-black flex-shrink-0 mt-0.5" />
               <div className="flex-1">
-                <p className="font-semibold text-white">Gagal Memproses Link</p>
+                <p className="font-semibold text-black">Gagal Memproses Link</p>
                 <p className="mt-0.5">{errorMessage}</p>
               </div>
             </div>
@@ -232,22 +231,22 @@ export default function App() {
       />
 
       {/* Minimalist Footer */}
-      <footer className="border-t border-white/10 bg-black py-8 relative z-10">
-        <div className="max-w-6xl mx-auto px-4 text-center sm:text-left flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-zinc-500">
+      <footer className="border-t-2 border-black bg-white py-8 relative z-10">
+        <div className="max-w-6xl mx-auto px-4 text-center sm:text-left flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-semibold text-black">
           <div>
-            <span className="font-bold text-white">DOWNLOADER</span> &copy; {new Date().getFullYear()} — Multi-Platform Video & Audio Downloader.
+            <span className="font-extrabold text-black uppercase tracking-widest">DOWNLOADER</span> &copy; {new Date().getFullYear()} — Multi-Platform Video & Audio Downloader.
           </div>
-          <div className="flex items-center gap-4 text-zinc-400">
+          <div className="flex items-center gap-4 text-black">
             <button
               onClick={() => setIsPrivacyOpen(true)}
-              className="hover:text-white transition cursor-pointer"
+              className="hover:underline transition cursor-pointer"
             >
               Privacy Policy
             </button>
             <span>•</span>
             <button
               onClick={() => setIsTermsOpen(true)}
-              className="hover:text-white transition cursor-pointer"
+              className="hover:underline transition cursor-pointer"
             >
               Terms of Service
             </button>

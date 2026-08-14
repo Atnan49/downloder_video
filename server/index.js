@@ -420,12 +420,14 @@ app.post('/api/info', async (req, res) => {
       }
     }
 
+    const safeTitle = encodeURIComponent(title.replace(/[^a-zA-Z0-9_\-\u00C0-\u017F ]/g, '').trim().substring(0, 50));
+    
     const formats = [
-      { id: 'f_best', quality: 'Best Available (MP4)', format: 'MP4', type: 'video', size: 'Best Quality', url: `/api/download?url=${encodeURIComponent(cleanUrl)}&format=mp4&quality=best` },
-      { id: 'f_720', quality: '720p HD (MP4)', format: 'MP4', type: 'video', size: '720p HD', url: `/api/download?url=${encodeURIComponent(cleanUrl)}&format=mp4&quality=720` },
-      { id: 'f_480', quality: '480p SD (MP4)', format: 'MP4', type: 'video', size: '480p SD', url: `/api/download?url=${encodeURIComponent(cleanUrl)}&format=mp4&quality=480` },
-      { id: 'f_mp3', quality: 'Audio MP3 (320kbps)', format: 'MP3', type: 'audio', size: '320kbps', url: `/api/download?url=${encodeURIComponent(cleanUrl)}&format=mp3` },
-      { id: 'f_m4a', quality: 'Audio M4A (Original)', format: 'M4A', type: 'audio', size: 'AAC Audio', url: `/api/download?url=${encodeURIComponent(cleanUrl)}&format=m4a` },
+      { id: 'f_best', quality: 'Best Available (MP4)', format: 'MP4', type: 'video', size: 'Best Quality', url: `/api/download?url=${encodeURIComponent(cleanUrl)}&format=mp4&quality=best&title=${safeTitle}` },
+      { id: 'f_720', quality: '720p HD (MP4)', format: 'MP4', type: 'video', size: '720p HD', url: `/api/download?url=${encodeURIComponent(cleanUrl)}&format=mp4&quality=720&title=${safeTitle}` },
+      { id: 'f_480', quality: '480p SD (MP4)', format: 'MP4', type: 'video', size: '480p SD', url: `/api/download?url=${encodeURIComponent(cleanUrl)}&format=mp4&quality=480&title=${safeTitle}` },
+      { id: 'f_mp3', quality: 'Audio MP3 (320kbps)', format: 'MP3', type: 'audio', size: '320kbps', url: `/api/download?url=${encodeURIComponent(cleanUrl)}&format=mp3&title=${safeTitle}` },
+      { id: 'f_m4a', quality: 'Audio M4A (Original)', format: 'M4A', type: 'audio', size: 'AAC Audio', url: `/api/download?url=${encodeURIComponent(cleanUrl)}&format=m4a&title=${safeTitle}` },
     ];
 
     const responseData = { platform, data: { title, author, authorAvatar: '', thumbnail, duration, previewUrl: '', formats } };
@@ -451,7 +453,7 @@ app.post('/api/info', async (req, res) => {
 const activeDownloads = new Map();
 
 app.get('/api/download', async (req, res) => {
-  const { url, format = 'mp4', quality = 'best' } = req.query;
+  const { url, format = 'mp4', quality = 'best', title = 'video' } = req.query;
   const cleanUrl = sanitizeUrl(url ? decodeURIComponent(url) : '');
   if (!cleanUrl) return res.status(400).send('URL tidak valid');
   if (!ytdlpAvailable) return res.status(503).send('yt-dlp belum siap');
@@ -506,7 +508,8 @@ app.get('/api/download', async (req, res) => {
 
       const file = outputFiles[0];
       const actualExt = path.extname(file.name).replace('.', '') || ext;
-      const safeFilename = `download_${Date.now()}.${actualExt}`;
+      const cleanTitle = title.replace(/[^a-zA-Z0-9_\-\u00C0-\u017F ]/g, '').trim().substring(0, 50) || 'video_download';
+      const safeFilename = `${cleanTitle}_${Date.now().toString().substring(8)}.${actualExt}`;
 
       let contentType = 'video/mp4';
       if (actualExt === 'mp3') contentType = 'audio/mpeg';

@@ -5,32 +5,32 @@
    ========================================================================== */
 
 :root {
-  --bg-primary: #000000;
-  --bg-secondary: #080808;
-  --bg-card: rgba(255, 255, 255, 0.03);
-  --bg-card-hover: rgba(255, 255, 255, 0.06);
-  --bg-glass: rgba(12, 12, 12, 0.75);
+  --bg-primary: #ffffff;
+  --bg-secondary: #f4f4f5;
+  --bg-card: #ffffff;
+  --bg-card-hover: #fafafa;
+  --bg-glass: #ffffff;
   
-  --border-subtle: rgba(255, 255, 255, 0.12);
-  --border-strong: rgba(255, 255, 255, 0.28);
-  --border-active: #ffffff;
+  --border-subtle: #000000;
+  --border-strong: #000000;
+  --border-active: #000000;
 
-  --text-primary: #ffffff;
-  --text-secondary: #a1a1aa;
-  --text-muted: #52525b;
+  --text-primary: #000000;
+  --text-secondary: #18181b;
+  --text-muted: #27272a;
 
-  --radius-sm: 8px;
-  --radius-md: 14px;
-  --radius-lg: 20px;
-  --radius-full: 9999px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-full: 0px;
 
-  --shadow-glow: 0 0 30px rgba(255, 255, 255, 0.12);
-  --shadow-glow-strong: 0 0 45px rgba(255, 255, 255, 0.25);
-  --shadow-card: 0 10px 30px -10px rgba(0, 0, 0, 0.8);
+  --shadow-glow: none;
+  --shadow-glow-strong: none;
+  --shadow-card: 4px 4px 0px rgba(0, 0, 0, 1);
 
-  --font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  --transition-fast: 0.18s cubic-bezier(0.16, 1, 0.3, 1);
-  --transition-normal: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  --font-family: 'Space Mono', 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --transition-fast: 0.1s cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-normal: 0.1s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 * {
@@ -39,7 +39,7 @@
 
 html {
   scroll-behavior: smooth;
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 body {
@@ -72,42 +72,37 @@ body {
   background: rgba(255, 255, 255, 0.4);
 }
 
-/* Utilities & Glassmorphism */
-.glass-panel {
+/* Utilities & Solid Design */
+.solid-panel {
   background: var(--bg-card);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--border-subtle);
+  border: 2px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-card);
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
 }
 
-.glass-panel:hover {
+.solid-panel:hover {
   border-color: var(--border-strong);
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0px rgba(0, 0, 0, 1);
 }
 
-.glass-nav {
-  background: rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-bottom: 1px solid var(--border-subtle);
+.solid-nav {
+  background: #ffffff;
+  border-bottom: 2px solid var(--border-subtle);
 }
 
 /* Typography Helpers */
 .title-gradient {
-  background: linear-gradient(180deg, #ffffff 0%, #a1a1aa 100%);
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: #000000;
 }
 
 /* Buttons */
 .btn-primary {
-  background: #ffffff;
-  color: #000000;
-  font-weight: 600;
-  border: 1px solid #ffffff;
+  background: #000000;
+  color: #ffffff;
+  font-weight: 700;
+  border: 2px solid #000000;
   padding: 12px 24px;
   border-radius: var(--radius-md);
   font-size: 0.95rem;
@@ -117,25 +112,26 @@ body {
   justify-content: center;
   gap: 8px;
   transition: all var(--transition-fast);
-  box-shadow: 0 4px 14px rgba(255, 255, 255, 0.15);
+  box-shadow: 4px 4px 0px rgba(0,0,0,1);
 }
 
 .btn-primary:hover {
-  background: #ededed;
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-glow);
+  background: #ffffff;
+  color: #000000;
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0px rgba(0,0,0,1);
 }
 
 .btn-primary:active {
-  transform: translateY(0);
-  background: #d4d4d8;
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0px rgba(0,0,0,1);
 }
 
 .btn-secondary {
-  background: rgba(255, 255, 255, 0.05);
-  color: #ffffff;
-  font-weight: 500;
-  border: 1px solid var(--border-subtle);
+  background: #ffffff;
+  color: #000000;
+  font-weight: 700;
+  border: 2px solid var(--border-subtle);
   padding: 10px 20px;
   border-radius: var(--radius-md);
   font-size: 0.9rem;
@@ -145,18 +141,20 @@ body {
   justify-content: center;
   gap: 8px;
   transition: all var(--transition-fast);
+  box-shadow: 3px 3px 0px rgba(0,0,0,1);
 }
 
 .btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: #f4f4f5;
   border-color: var(--border-strong);
-  color: #ffffff;
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0px rgba(0,0,0,1);
 }
 
 .btn-icon {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--border-subtle);
-  color: #ffffff;
+  background: #ffffff;
+  border: 2px solid var(--border-subtle);
+  color: #000000;
   width: 42px;
   height: 42px;
   border-radius: var(--radius-md);
@@ -165,12 +163,14 @@ body {
   justify-content: center;
   cursor: pointer;
   transition: all var(--transition-fast);
+  box-shadow: 2px 2px 0px rgba(0,0,0,1);
 }
 
 .btn-icon:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: #f4f4f5;
   border-color: var(--border-strong);
-  transform: scale(1.03);
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0px rgba(0,0,0,1);
 }
 
 /* Animations */

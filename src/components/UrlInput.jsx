@@ -54,18 +54,18 @@ export default function UrlInput({ onSubmit, isLoading, urlValue, setUrlValue })
       <form onSubmit={handleSubmit} className="relative group">
         
         {/* Glowing Background Effect */}
-        <div className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-white/10 via-white/20 to-white/10 opacity-40 blur-md group-hover:opacity-75 transition duration-500"></div>
+        <div className="absolute -inset-1 rounded-none border-2 border-black bg-gradient-to-r from-white/10 via-white/20 to-white/10 opacity-40 blur-md group-hover:opacity-75 transition duration-500"></div>
 
-        <div className="relative glass-panel p-2 sm:p-2.5 flex items-center gap-2 rounded-2xl border-white/20 bg-black/90">
+        <div className="relative solid-panel p-2 sm:p-2.5 flex items-center gap-2 rounded-none border-2 border-black bg-black/90">
           
           {/* Platform Icon or Search Icon */}
-          <div className="pl-3 sm:pl-4 text-zinc-400 flex items-center justify-center min-w-[28px]">
+          <div className="pl-3 sm:pl-4 text-zinc-700 flex items-center justify-center min-w-[28px]">
             {detectedPlatform && PlatformIconComponent ? (
-              <span className="w-7 h-7 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-white">
+              <span className="w-7 h-7 rounded-none bg-black/10 border border-black flex items-center justify-center text-black">
                 <PlatformIconComponent className="w-3.5 h-3.5" />
               </span>
             ) : (
-              <Search className="w-5 h-5 text-zinc-400" />
+              <Search className="w-5 h-5 text-zinc-700" />
             )}
           </div>
 
@@ -75,7 +75,7 @@ export default function UrlInput({ onSubmit, isLoading, urlValue, setUrlValue })
             value={urlValue}
             onChange={(e) => setUrlValue(e.target.value)}
             placeholder="Tempel tautan video (TikTok, YouTube, Instagram, Facebook, X)..."
-            className="w-full bg-transparent text-white placeholder-zinc-500 text-sm sm:text-base py-3 px-1 focus:outline-none"
+            className="w-full bg-transparent text-black placeholder-zinc-500 text-sm sm:text-base py-3 px-1 focus:outline-none"
             required
             disabled={isLoading}
           />
@@ -86,7 +86,7 @@ export default function UrlInput({ onSubmit, isLoading, urlValue, setUrlValue })
               <button
                 type="button"
                 onClick={handleClear}
-                className="p-2 text-zinc-400 hover:text-white hover:bg-white/10 rounded-lg transition"
+                className="p-2 text-zinc-700 hover:text-black hover:bg-black/10 rounded-none border-2 border-black transition"
                 title="Hapus"
               >
                 <X className="w-4 h-4" />
@@ -95,7 +95,7 @@ export default function UrlInput({ onSubmit, isLoading, urlValue, setUrlValue })
               <button
                 type="button"
                 onClick={handlePaste}
-                className="hidden sm:flex items-center gap-1 px-3 py-1.5 text-xs text-zinc-400 hover:text-white border border-white/10 hover:border-white/25 rounded-lg bg-white/[0.03] transition"
+                className="hidden sm:flex items-center gap-1 px-3 py-1.5 text-xs text-zinc-700 hover:text-black border border-black hover:border-black rounded-none border-2 border-black bg-black/[0.03] transition"
                 title="Tempel dari Clipboard"
               >
                 <Clipboard className="w-3.5 h-3.5" />
@@ -107,7 +107,7 @@ export default function UrlInput({ onSubmit, isLoading, urlValue, setUrlValue })
             <button
               type="submit"
               disabled={isLoading || !urlValue.trim()}
-              className="btn-primary py-3 px-5 sm:px-7 rounded-xl text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+              className="btn-primary py-3 px-5 sm:px-7 rounded-none border-2 border-black text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
             >
               {isLoading ? (
                 <>
@@ -129,12 +129,12 @@ export default function UrlInput({ onSubmit, isLoading, urlValue, setUrlValue })
 
       {/* Auto-detected Platform Badge */}
       {detectedPlatform && (
-        <div className="mt-3 flex items-center justify-between text-xs text-zinc-400 px-2 animate-fade-in">
+        <div className="mt-3 flex items-center justify-between text-xs text-zinc-700 px-2 animate-fade-in">
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-white animate-pulse"></span>
-            <span>Terdeteksi: <strong className="text-white">{detectedPlatform.name}</strong></span>
+            <span className="w-2 h-2 rounded-none bg-black text-white animate-pulse"></span>
+            <span>Terdeteksi: <strong className="text-black">{detectedPlatform.name}</strong></span>
           </div>
-          <span className="px-2 py-0.5 rounded border border-white/20 bg-white/5 text-[11px] text-zinc-300">
+          <span className="px-2 py-0.5 rounded border border-black bg-black/5 text-[11px] text-zinc-800">
             {detectedPlatform.badge}
           </span>
         </div>
@@ -142,10 +142,10 @@ export default function UrlInput({ onSubmit, isLoading, urlValue, setUrlValue })
 
       {/* Supported Platforms Quick Pills */}
       {!detectedPlatform && (
-        <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-xs text-zinc-500">
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-xs text-zinc-600">
           <span className="text-zinc-600">Didukung:</span>
           {['TikTok (No WM)', 'YouTube 4K & MP3', 'Instagram Reels', 'Facebook HD', 'X / Twitter'].map((item, idx) => (
-            <span key={idx} className="px-2.5 py-1 rounded-full border border-white/10 bg-white/[0.02] text-zinc-400 hover:border-white/20 transition cursor-default font-medium">
+            <span key={idx} className="px-2.5 py-1 rounded-none border border-black bg-black/[0.02] text-zinc-700 hover:border-black transition cursor-default font-medium">
               {item}
             </span>
           ))}
