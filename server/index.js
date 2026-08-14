@@ -211,9 +211,9 @@ function buildProtectionArgs(cleanUrl, forceClient = null, disableCookies = fals
     '--geo-bypass',
     '--no-check-certificates',
     '--no-playlist',
-    '--retries', '1',
-    '--fragment-retries', '1',
-    '--socket-timeout', '8',
+    '--retries', '2',
+    '--fragment-retries', '2',
+    '--socket-timeout', '10',
     '--user-agent', getRandomUserAgent()
   ];
 
@@ -238,7 +238,8 @@ function buildProtectionArgs(cleanUrl, forceClient = null, disableCookies = fals
   // Solusi 7: YouTube Extractor Args & PO Token
   const isYouTube = cleanUrl.includes('youtube.com') || cleanUrl.includes('youtu.be');
   if (isYouTube) {
-    const client = forceClient || 'android,ios,web';
+    // If no explicit client is specified, web,mweb with cookies & PO Token works best on cloud IPs
+    const client = forceClient || 'web,mweb';
     let ytArgs = `youtube:player_client=${client}`;
     if (YT_PO_TOKEN) {
       ytArgs += `;po_token=${YT_PO_TOKEN}`;
@@ -257,35 +258,35 @@ function buildProtectionArgs(cleanUrl, forceClient = null, disableCookies = fals
   return args;
 }
 
-// Fast fallback executor for YouTube with detailed error logging
-async function execYtDlpWithFallback(cleanUrl, baseArgs, maxBuffer = 1024 * 1024 * 50, perAttemptTimeout = 12000) {
+// Robust fallback executor for YouTube
+async function execYtDlpWithFallback(cleanUrl, baseArgs, maxBuffer = 1024 * 1024 * 50, perAttemptTimeout = 25000) {
   const isYouTube = cleanUrl.includes('youtube.com') || cleanUrl.includes('youtu.be');
 
-  // Attempt 1: Fast Android/iOS/Web client (takes ~2-4s)
+  // Attempt 1: Web & Mweb client with PO Token & Cookies
   try {
-    const protectionArgs = buildProtectionArgs(cleanUrl, 'android,ios,web');
+    const protectionArgs = buildProtectionArgs(cleanUrl, 'web,mweb');
     const args = [...baseArgs, ...protectionArgs, cleanUrl];
     return await execFilePromise(YTDLP_BIN, args, { maxBuffer, timeout: perAttemptTimeout });
   } catch (err1) {
-    console.warn('yt-dlp Attempt 1 (android,ios,web) failed:', err1.message);
+    console.warn('yt-dlp Attempt 1 (web,mweb) failed:', err1.message);
     if (err1.stdout) console.log('Attempt 1 STDOUT:', err1.stdout.substring(0, 1000));
     if (err1.stderr) console.error('Attempt 1 STDERR:', err1.stderr.substring(0, 1000));
 
     if (isYouTube) {
-      // Attempt 2: Try android client specifically WITHOUT cookies
+      // Attempt 2: Tvhtml5 client fallback
       try {
-        console.log('Retrying yt-dlp with YouTube android client without cookies...');
-        const protectionArgs2 = buildProtectionArgs(cleanUrl, 'android', true);
+        console.log('Retrying yt-dlp with YouTube tvhtml5 client fallback...');
+        const protectionArgs2 = buildProtectionArgs(cleanUrl, 'tvhtml5');
         const args2 = [...baseArgs, ...protectionArgs2, cleanUrl];
         return await execFilePromise(YTDLP_BIN, args2, { maxBuffer, timeout: perAttemptTimeout });
       } catch (err2) {
-        console.warn('yt-dlp Attempt 2 (android no-cookies) failed:', err2.message);
+        console.warn('yt-dlp Attempt 2 (tvhtml5) failed:', err2.message);
         if (err2.stdout) console.log('Attempt 2 STDOUT:', err2.stdout.substring(0, 1000));
         if (err2.stderr) console.error('Attempt 2 STDERR:', err2.stderr.substring(0, 1000));
 
-        // Attempt 3: Try tvhtml5 fallback
-        console.log('Retrying yt-dlp with YouTube tvhtml5 fallback...');
-        const protectionArgs3 = buildProtectionArgs(cleanUrl, 'tvhtml5');
+        // Attempt 3: Android client WITHOUT cookies
+        console.log('Retrying yt-dlp with YouTube android client without cookies...');
+        const protectionArgs3 = buildProtectionArgs(cleanUrl, 'android', true);
         const args3 = [...baseArgs, ...protectionArgs3, cleanUrl];
         return await execFilePromise(YTDLP_BIN, args3, { maxBuffer, timeout: perAttemptTimeout });
       }
@@ -334,7 +335,6 @@ app.post('/api/info', async (req, res) => {
     return res.json({ success: true, fromCache: true, ...cached });
   }
 
-  // Request deduplication for identical in-flight URL
   if (inFlightRequests.has(cleanUrl)) {
     console.log(`[DEDUPLICATE] In-flight request detected for ${cleanUrl}, awaiting shared promise...`);
     try {
@@ -358,7 +358,7 @@ app.post('/api/info', async (req, res) => {
 
     try {
       const baseArgs = ['--dump-single-json', '--no-warnings'];
-      const { stdout } = await execYtDlpWithFallback(cleanUrl, baseArgs, 1024 * 1024 * 20, 12000);
+      const { stdout } = await execYtDlpWithFallback(cleanUrl, baseArgs, 1024 * 1024 * 20, 25000);
       if (stdout?.trim().startsWith('{')) {
         const info = JSON.parse(stdout);
         title = info.title || info.fulltitle || title;
