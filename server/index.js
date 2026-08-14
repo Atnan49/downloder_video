@@ -458,12 +458,12 @@ app.get('/api/download', async (req, res) => {
   if (ext === 'mp3') {
     formatArgs = ['-x', '--audio-format', 'mp3', '--audio-quality', '0'];
   } else if (ext === 'm4a') {
-    formatArgs = ['-f', 'ba[ext=m4a]/ba/bestaudio'];
+    formatArgs = ['-f', 'ba[ext=m4a]/ba/bestaudio/b'];
   } else {
     if (quality === 'best') {
-      formatArgs = ['-f', 'best[ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/b/best', '--merge-output-format', 'mp4'];
+      formatArgs = ['-f', 'best[ext=mp4]/best/bestvideo+bestaudio/b', '--merge-output-format', 'mp4'];
     } else {
-      formatArgs = ['-f', `best[ext=mp4][height<=${quality}]/bestvideo[height<=${quality}][ext=mp4]+bestaudio[ext=m4a]/b[height<=${quality}]/best[height<=${quality}]/best`, '--merge-output-format', 'mp4'];
+      formatArgs = ['-f', `best[ext=mp4][height<=${quality}]/best[height<=${quality}]/bestvideo[height<=${quality}]+bestaudio/b`, '--merge-output-format', 'mp4'];
     }
   }
 
