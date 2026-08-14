@@ -5,6 +5,9 @@ USER root
 # Install Node.js on Alpine
 RUN apk update && apk add --no-cache nodejs npm
 
+# Allow yt-dlp auto-update for non-root user
+RUN chmod a+w $(which yt-dlp) || true
+
 # Verify tools are installed
 RUN yt-dlp --version && node --version && ffmpeg -version | head -1
 

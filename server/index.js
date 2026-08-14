@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import { execFile, spawn } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -22,17 +22,212 @@ app.use(express.static(distPath));
 
 const YTDLP_BIN = process.platform === 'win32' ? 'yt-dlp' : 'yt-dlp';
 
-// Startup check
+// ============================================================
+// CONFIGURATION & ENVS
+// ============================================================
+const PROXY_URL = process.env.PROXY_URL || '';
+const PROXY_LIST = process.env.PROXY_LIST ? process.env.PROXY_LIST.split(',').map(s => s.trim()).filter(Boolean) : [];
+const COOKIE_PATH_ENV = process.env.COOKIE_PATH || '';
+const YT_PO_TOKEN = process.env.YT_PO_TOKEN || '';
+const YT_VISITOR_DATA = process.env.YT_VISITOR_DATA || '';
+const MAX_CONCURRENT = parseInt(process.env.MAX_CONCURRENT_DOWNLOADS || '4', 10);
+const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
+const RATE_LIMIT_MAX = parseInt(process.env.RATE_LIMIT_PER_MIN || '30', 10);
+
+// ============================================================
+// SOLUSI 6: USER-AGENTS SPOOFING
+// ============================================================
+const USER_AGENTS = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
+];
+
+function getRandomUserAgent() {
+  return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+}
+
+// ============================================================
+// SOLUSI 1: PROXY ROTATION MANAGER
+// ============================================================
+let proxyIndex = 0;
+function getNextProxy() {
+  if (PROXY_LIST.length > 0) {
+    const p = PROXY_LIST[proxyIndex % PROXY_LIST.length];
+    proxyIndex++;
+    return p;
+  }
+  return PROXY_URL || null;
+}
+
+// ============================================================
+// SOLUSI 2: COOKIES AUTO-DETECTION
+// ============================================================
+function getCookieFile() {
+  if (COOKIE_PATH_ENV && fs.existsSync(COOKIE_PATH_ENV)) {
+    return COOKIE_PATH_ENV;
+  }
+  const rootCookie = path.join(__dirname, '../cookies.txt');
+  if (fs.existsSync(rootCookie)) return rootCookie;
+
+  const serverCookie = path.join(__dirname, 'cookies.txt');
+  if (fs.existsSync(serverCookie)) return serverCookie;
+
+  return null;
+}
+
+// ============================================================
+// SOLUSI 3: METADATA IN-MEMORY CACHE (1 Hour TTL)
+// ============================================================
+const metadataCache = new Map();
+const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+function getCachedMetadata(url) {
+  const cached = metadataCache.get(url);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+    return cached.data;
+  }
+  if (cached) metadataCache.delete(url);
+  return null;
+}
+
+function setCachedMetadata(url, data) {
+  // Simple cache eviction if too large
+  if (metadataCache.size > 500) {
+    const oldestKey = metadataCache.keys().next().value;
+    metadataCache.delete(oldestKey);
+  }
+  metadataCache.set(url, { timestamp: Date.now(), data });
+}
+
+// ============================================================
+// SOLUSI 5: RATE LIMITER & CONCURRENCY QUEUE
+// ============================================================
+const ipRequestCounts = new Map();
+
+function rateLimiter(req, res, next) {
+  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
+  const now = Date.now();
+  const clientData = ipRequestCounts.get(ip) || { count: 0, resetTime: now + RATE_LIMIT_WINDOW_MS };
+
+  if (now > clientData.resetTime) {
+    clientData.count = 1;
+    clientData.resetTime = now + RATE_LIMIT_WINDOW_MS;
+  } else {
+    clientData.count += 1;
+  }
+
+  ipRequestCounts.set(ip, clientData);
+
+  if (clientData.count > RATE_LIMIT_MAX) {
+    return res.status(429).json({ success: false, error: 'Terlalu banyak permintaan. Silakan tunggu beberapa saat.' });
+  }
+  next();
+}
+
+app.use('/api/', rateLimiter);
+
+// Simple async task queue for downloads
+class TaskQueue {
+  constructor(concurrency) {
+    this.concurrency = concurrency;
+    this.running = 0;
+    this.queue = [];
+  }
+
+  push(taskFn) {
+    return new Promise((resolve, reject) => {
+      this.queue.push({ taskFn, resolve, reject });
+      this.next();
+    });
+  }
+
+  next() {
+    if (this.running >= this.concurrency || this.queue.length === 0) return;
+    const { taskFn, resolve, reject } = this.queue.shift();
+    this.running++;
+    taskFn()
+      .then(resolve)
+      .catch(reject)
+      .finally(() => {
+        this.running--;
+        this.next();
+      });
+  }
+}
+
+const downloadQueue = new TaskQueue(MAX_CONCURRENT);
+
+// ============================================================
+// SOLUSI 4: AUTO-UPDATE YT-DLP ON STARTUP & INTERVAL
+// ============================================================
 let ytdlpAvailable = false;
-(async () => {
+let ytdlpVersion = 'Unknown';
+
+async function updateYtDlp() {
   try {
     const { stdout } = await execFilePromise(YTDLP_BIN, ['--version'], { timeout: 10000 });
+    ytdlpVersion = stdout.trim();
     ytdlpAvailable = true;
-    console.log(`yt-dlp: v${stdout.trim()}`);
+    console.log(`yt-dlp ready: v${ytdlpVersion}`);
+
+    // Try auto-update in background
+    execFile(YTDLP_BIN, ['-U'], (err, out) => {
+      if (!err && out) console.log(`yt-dlp update check: ${out.trim().split('\n')[0]}`);
+    });
   } catch (e) {
-    console.error('yt-dlp not found:', e.message);
+    console.error('yt-dlp initialization check failed:', e.message);
   }
-})();
+}
+
+// Initial check & setup 12-hour update schedule
+updateYtDlp();
+setInterval(updateYtDlp, 12 * 60 * 60 * 1000);
+
+// ============================================================
+// HELPER: BUILD YT-DLP COMMON PROTECTION ARGS
+// ============================================================
+function buildProtectionArgs(cleanUrl) {
+  const args = [
+    '--geo-bypass',
+    '--no-check-certificates',
+    '--no-playlist',
+    '--user-agent', getRandomUserAgent()
+  ];
+
+  // Solusi 1: Proxy
+  const proxy = getNextProxy();
+  if (proxy) {
+    args.push('--proxy', proxy);
+  }
+
+  // Solusi 2: Cookies
+  const cookieFile = getCookieFile();
+  if (cookieFile) {
+    args.push('--cookies', cookieFile);
+  }
+
+  // Solusi 7: YouTube Extractor Args & PO Token
+  const isYouTube = cleanUrl.includes('youtube.com') || cleanUrl.includes('youtu.be');
+  if (isYouTube) {
+    let ytArgs = 'youtube:player_client=web,mweb';
+    if (YT_PO_TOKEN) {
+      ytArgs += `;po_token=${YT_PO_TOKEN}`;
+    }
+    if (YT_VISITOR_DATA) {
+      ytArgs += `;visitor_data=${YT_VISITOR_DATA}`;
+    }
+    args.push('--extractor-args', ytArgs);
+    args.push('--add-header', 'Referer:https://www.youtube.com/');
+  } else if (cleanUrl.includes('tiktok.com')) {
+    args.push('--add-header', 'Referer:https://www.tiktok.com/');
+  } else if (cleanUrl.includes('instagram.com')) {
+    args.push('--add-header', 'Referer:https://www.instagram.com/');
+  }
+
+  return args;
+}
 
 function sanitizeUrl(url) {
   if (!url || typeof url !== 'string') return null;
@@ -42,19 +237,37 @@ function sanitizeUrl(url) {
   return t;
 }
 
-// Health check
+// ============================================================
+// HEALTH CHECK
+// ============================================================
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', ytdlp: ytdlpAvailable, time: new Date().toISOString() });
+  res.json({
+    status: 'ok',
+    ytdlp: ytdlpAvailable,
+    version: ytdlpVersion,
+    activeDownloads: downloadQueue.running,
+    queuedDownloads: downloadQueue.queue.length,
+    cachedItems: metadataCache.size,
+    hasCookies: Boolean(getCookieFile()),
+    hasProxy: Boolean(getNextProxy()),
+    time: new Date().toISOString()
+  });
 });
 
-// ============================
-// METADATA EXTRACTION
-// ============================
+// ============================================================
+// METADATA EXTRACTION (/api/info)
+// ============================================================
 app.post('/api/info', async (req, res) => {
   const { url } = req.body;
   const cleanUrl = sanitizeUrl(url);
   if (!cleanUrl) return res.status(400).json({ success: false, error: 'URL tidak valid.' });
   if (!ytdlpAvailable) return res.status(503).json({ success: false, error: 'yt-dlp belum siap.' });
+
+  // Solusi 3: Check In-Memory Cache first
+  const cached = getCachedMetadata(cleanUrl);
+  if (cached) {
+    return res.json({ success: true, fromCache: true, ...cached });
+  }
 
   let platform = 'video';
   if (cleanUrl.includes('tiktok.com')) platform = 'tiktok';
@@ -66,14 +279,14 @@ app.post('/api/info', async (req, res) => {
   let thumbnail = '';
   let duration = 'N/A';
 
-  // Try yt-dlp metadata (PO Token Provider handles YouTube bot check)
   try {
     const args = [
-      '--dump-single-json', '--no-warnings', '--no-playlist',
-      '--geo-bypass', '--no-check-certificates',
+      '--dump-single-json',
+      '--no-warnings',
+      ...buildProtectionArgs(cleanUrl),
       cleanUrl
     ];
-    const { stdout } = await execFilePromise(YTDLP_BIN, args, { maxBuffer: 1024 * 1024 * 20, timeout: 20000 });
+    const { stdout } = await execFilePromise(YTDLP_BIN, args, { maxBuffer: 1024 * 1024 * 20, timeout: 25000 });
     if (stdout?.trim().startsWith('{')) {
       const info = JSON.parse(stdout);
       title = info.title || info.fulltitle || title;
@@ -106,12 +319,17 @@ app.post('/api/info', async (req, res) => {
     { id: 'f_m4a', quality: 'Audio M4A (Original)', format: 'M4A', type: 'audio', size: 'AAC Audio', url: `/api/download?url=${encodeURIComponent(cleanUrl)}&format=m4a` },
   ];
 
-  return res.json({ success: true, platform, data: { title, author, authorAvatar: '', thumbnail, duration, previewUrl: '', formats } });
+  const responseData = { platform, data: { title, author, authorAvatar: '', thumbnail, duration, previewUrl: '', formats } };
+  
+  // Save to Cache
+  setCachedMetadata(cleanUrl, responseData);
+
+  return res.json({ success: true, ...responseData });
 });
 
-// ============================
-// DOWNLOAD - Temp file + send
-// ============================
+// ============================================================
+// DOWNLOAD ENDPOINT (/api/download) WITH QUEUE
+// ============================================================
 app.get('/api/download', async (req, res) => {
   const { url, format = 'mp4', quality = 'best' } = req.query;
   const cleanUrl = sanitizeUrl(url ? decodeURIComponent(url) : '');
@@ -123,32 +341,30 @@ app.get('/api/download', async (req, res) => {
   const tmpDir = os.tmpdir();
   const outTemplate = path.join(tmpDir, `${uid}.%(ext)s`);
 
-  // Build yt-dlp args
-  let args = [];
+  let formatArgs = [];
   if (ext === 'mp3') {
-    args = ['-x', '--audio-format', 'mp3', '--audio-quality', '0'];
+    formatArgs = ['-x', '--audio-format', 'mp3', '--audio-quality', '0'];
   } else if (ext === 'm4a') {
-    args = ['-f', 'ba[ext=m4a]/ba'];
+    formatArgs = ['-f', 'ba[ext=m4a]/ba'];
   } else {
-    // Video: prefer pre-muxed single stream for speed, fallback to merge
     if (quality === 'best') {
-      args = ['-f', 'best[ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best', '--merge-output-format', 'mp4'];
+      formatArgs = ['-f', 'best[ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best', '--merge-output-format', 'mp4'];
     } else {
-      args = ['-f', `best[ext=mp4][height<=${quality}]/bestvideo[height<=${quality}][ext=mp4]+bestaudio[ext=m4a]/best[height<=${quality}]/best`, '--merge-output-format', 'mp4'];
+      formatArgs = ['-f', `best[ext=mp4][height<=${quality}]/bestvideo[height<=${quality}][ext=mp4]+bestaudio[ext=m4a]/best[height<=${quality}]/best`, '--merge-output-format', 'mp4'];
     }
   }
 
-  args.push(
-    '--geo-bypass', '--no-check-certificates', '--no-playlist',
+  const fullArgs = [
+    ...formatArgs,
+    ...buildProtectionArgs(cleanUrl),
     '-o', outTemplate,
     cleanUrl
-  );
+  ];
 
+  // Solusi 5: Enqueue download task to manage concurrency
   try {
-    // Download with generous timeout (3 minutes for large videos)
-    await execFilePromise(YTDLP_BIN, args, { timeout: 180000, maxBuffer: 1024 * 1024 * 50 });
+    await downloadQueue.push(() => execFilePromise(YTDLP_BIN, fullArgs, { timeout: 180000, maxBuffer: 1024 * 1024 * 50 }));
 
-    // Find the output file (yt-dlp may change extension)
     const outputFiles = fs.readdirSync(tmpDir)
       .filter(f => f.startsWith(uid))
       .map(f => ({ name: f, full: path.join(tmpDir, f), size: fs.statSync(path.join(tmpDir, f)).size }))
@@ -200,5 +416,5 @@ app.get('*', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Server running on port ${PORT} with Solutions 1-7 anti-blocking enabled`);
 });
