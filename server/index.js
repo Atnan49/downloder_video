@@ -62,34 +62,48 @@ function getNextProxy() {
 }
 
 // ============================================================
-// SOLUSI 2: COOKIES AUTO-DETECTION & ENV SUPPORT
+// SOLUSI 2: COOKIES VALIDATION & AUTO-DETECTION
 // ============================================================
 function getCookieFile() {
   const tmpEnvCookie = path.join(os.tmpdir(), 'yt_env_cookies.txt');
   
   if (process.env.YT_COOKIES_TEXT) {
     try {
-      fs.writeFileSync(tmpEnvCookie, process.env.YT_COOKIES_TEXT.trim());
-      return tmpEnvCookie;
+      let raw = process.env.YT_COOKIES_TEXT.trim();
+      if (raw.includes('\\n')) raw = raw.replace(/\\n/g, '\n');
+      if (raw.includes('\\t')) raw = raw.replace(/\\t/g, '\t');
+      if (!raw.startsWith('# Netscape')) {
+        raw = '# Netscape HTTP Cookie File\n' + raw;
+      }
+      fs.writeFileSync(tmpEnvCookie, raw);
     } catch (e) {}
-  }
-  if (process.env.YT_COOKIES_BASE64) {
+  } else if (process.env.YT_COOKIES_BASE64) {
     try {
       const decoded = Buffer.from(process.env.YT_COOKIES_BASE64.trim(), 'base64').toString('utf-8');
       fs.writeFileSync(tmpEnvCookie, decoded);
-      return tmpEnvCookie;
     } catch (e) {}
   }
-  if (fs.existsSync(tmpEnvCookie) && fs.statSync(tmpEnvCookie).size > 10) return tmpEnvCookie;
 
-  if (COOKIE_PATH_ENV && fs.existsSync(COOKIE_PATH_ENV)) {
-    return COOKIE_PATH_ENV;
+  const candidates = [
+    tmpEnvCookie,
+    COOKIE_PATH_ENV,
+    path.join(__dirname, '../cookies.txt'),
+    path.join(__dirname, 'cookies.txt')
+  ].filter(Boolean);
+
+  for (const file of candidates) {
+    if (fs.existsSync(file)) {
+      try {
+        const stat = fs.statSync(file);
+        if (stat.size > 20) {
+          const content = fs.readFileSync(file, 'utf-8');
+          if (content.includes('\t') || content.includes('Netscape')) {
+            return file;
+          }
+        }
+      } catch (e) {}
+    }
   }
-  const rootCookie = path.join(__dirname, '../cookies.txt');
-  if (fs.existsSync(rootCookie) && fs.statSync(rootCookie).size > 10) return rootCookie;
-
-  const serverCookie = path.join(__dirname, 'cookies.txt');
-  if (fs.existsSync(serverCookie) && fs.statSync(serverCookie).size > 10) return serverCookie;
 
   return null;
 }
@@ -213,8 +227,9 @@ function buildProtectionArgs(cleanUrl, forceClient = null, disableCookies = fals
     '--geo-bypass',
     '--no-check-certificates',
     '--no-playlist',
-    '--retries', '1',
-    '--socket-timeout', '8',
+    '--retries', '2',
+    '--fragment-retries', '2',
+    '--socket-timeout', '15',
     '--user-agent', getRandomUserAgent(),
     ...debugFlags
   ];
@@ -256,7 +271,7 @@ function buildProtectionArgs(cleanUrl, forceClient = null, disableCookies = fals
 }
 
 // Fast & robust fallback executor for YouTube with explicit stderr/stdout logging
-async function execYtDlpWithFallback(cleanUrl, baseArgs, maxBuffer = 1024 * 1024 * 50, perAttemptTimeout = 15000) {
+async function execYtDlpWithFallback(cleanUrl, baseArgs, maxBuffer = 1024 * 1024 * 50, perAttemptTimeout = 20000) {
   const isYouTube = cleanUrl.includes('youtube.com') || cleanUrl.includes('youtu.be');
 
   // Attempt 1: Web & Mweb client with PO Token & Cookies
@@ -339,7 +354,6 @@ app.post('/api/info', async (req, res) => {
     return res.json({ success: true, fromCache: true, ...cached });
   }
 
-  // Deduplication for duplicate in-flight requests
   if (inFlightRequests.has(cleanUrl)) {
     console.log(`[DEDUPLICATE] In-flight info request detected for ${cleanUrl}, awaiting shared promise...`);
     try {
